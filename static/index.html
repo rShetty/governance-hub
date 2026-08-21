@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Governance Hub — AI Governance Console</title>
+<style>
+  :root {
+    --bg: #0b1020; --panel: #121a30; --panel2: #182238; --text: #e7ecf7;
+    --muted: #93a1bd; --ok: #34d399; --bad: #f87171; --accent: #6366f1;
+    --border: #24304f;
+  }
+  [data-theme="light"] { --bg:#f4f6fb; --panel:#ffffff; --panel2:#eef2fa; --text:#111a2e; --muted:#5b6b8c; --border:#d9e0ef; }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    background: var(--bg); color: var(--text); min-height: 100vh;
+  }
+  header {
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap;
+    gap:.75rem; padding:1.1rem clamp(1rem, 4vw, 3rem);
+    border-bottom:1px solid var(--border); position:sticky; top:0; backdrop-filter: blur(10px);
+    background: color-mix(in srgb, var(--bg) 82%, transparent); z-index:5;
+  }
+  .brand { display:flex; align-items:center; gap:.65rem; font-weight:700; font-size:1.15rem; letter-spacing:.2px; }
+  .logo { width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#a855f7); display:grid;place-items:center; font-size:1.05rem;}
+  header .actions { display:flex; gap:.6rem; align-items:center; }
+  button.theme { background:var(--panel); border:1px solid var(--border); color:var(--text); border-radius:9px; padding:.45rem .8rem; cursor:pointer; font-size:.85rem;}
+  main { max-width:1200px; margin:0 auto; padding:clamp(1rem,3vw,2.5rem); }
+  h1 { font-size:clamp(1.4rem, 3.5vw, 2.1rem); margin-bottom:.35rem; }
+  .sub { color:var(--muted); margin-bottom:1.6rem; max-width:60ch; line-height:1.5;}
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:.9rem; margin-bottom:2rem;}
+  .stat { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:1rem 1.1rem;}
+  .stat .num {font-size:1.7rem;font-weight:800;}
+  .stat .lbl {color:var(--muted); font-size:.8rem; text-transform:uppercase; letter-spacing:.08em;}
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:1rem; }
+  .card {
+    background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:1.25rem;
+    display:flex; flex-direction:column; gap:.55rem; transition: transform .18s ease, border-color .18s ease;
+    position:relative; overflow:hidden;
+  }
+  .card::before { content:""; position:absolute; inset:0 auto 0 0; width:4px; background:var(--sc, var(--accent)); }
+  .card:hover { transform: translateY(-3px); border-color: var(--sc, var(--accent)); }
+  .card h3 { font-size:1.08rem; display:flex; align-items:center; gap:.5rem; }
+  .dot { width:9px;height:9px;border-radius:50%; background:var(--muted); flex:none;}
+  .dot.ok { background: var(--ok); box-shadow: 0 0 10px color-mix(in srgb, var(--ok) 70%, transparent);}
+  .dot.bad { background: var(--bad); }
+  .desc { color:var(--muted); font-size:.86rem; line-height:1.45; flex:1;}
+  .meta { display:flex; justify-content:space-between; align-items:center; font-size:.78rem; color:var(--muted); }
+  a.btn { text-decoration:none; color:var(--text); background:var(--panel2); border:1px solid var(--border);
+    padding:.42rem .85rem; border-radius:9px; font-size:.83rem; font-weight:600;}
+  a.btn:hover { border-color: var(--accent); }
+  footer { text-align:center; color:var(--muted); font-size:.78rem; padding:2.2rem 1rem 2.8rem; }
+  .refresh-note{color:var(--muted);font-size:.75rem;}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><div class="logo">🛡️</div> Governance Hub</div>
+  <div class="actions">
+    <span class="refresh-note" id="updated">—</span>
+    <button class="theme" onclick="toggleTheme()" title="Toggle theme">◐ Theme</button>
+    <button class="theme" onclick="load()" title="Refresh">⟳ Refresh</button>
+  </div>
+</header>
+<main>
+  <h1>AI Governance Console</h1>
+  <p class="sub">Unified control surface across the governance stack — agent runtime &amp; marketplace,
+     authorization control plane, MCP tool gateway, cost optimization, DLP &amp; compliance,
+     and network egress control.</p>
+
+  <div class="stats">
+    <div class="stat"><div class="num" id="s-total">–</div><div class="lbl">Services</div></div>
+    <div class="stat"><div class="num" id="s-ok">–</div><div class="lbl">Healthy</div></div>
+    <div class="stat"><div class="num" id="s-bad">–</div><div class="lbl">Degraded</div></div>
+    <div class="stat"><div class="num" id="s-latency">–</div><div class="lbl">Avg latency (ms)</div></div>
+  </div>
+
+  <div class="grid" id="grid"><div class="desc">Loading services…</div></div>
+</main>
+<footer>Governance Hub · Hive · Patroclus · Relay · Miser · Sentiel · Aegis</footer>
+<script>
+function toggleTheme(){
+  const cur = document.documentElement.getAttribute('data-theme');
+  document.documentElement.setAttribute('data-theme', cur === 'light' ? '' : 'light');
+}
+async function load(){
+  try{
+    const r = await fetch('/api/services');
+    const data = await r.json();
+    const list = data.services || [];
+    const ok = list.filter(s=>s.healthy).length;
+    document.getElementById('s-total').textContent = list.length;
+    document.getElementById('s-ok').textContent = ok;
+    document.getElementById('s-bad').textContent = list.length - ok;
+    const lats = list.filter(s=>s.latency_ms).map(s=>s.latency_ms);
+    document.getElementById('s-latency').textContent = lats.length ? Math.round(lats.reduce((a,b)=>a+b,0)/lats.length) : '–';
+    document.getElementById('grid').innerHTML = list.map(s=>`
+      <div class="card" style="--sc:${s.color}">
+        <h3><span class="dot ${s.healthy?'ok':'bad'}"></span>${s.label}</h3>
+        <div class="desc">${s.description}</div>
+        <div class="meta"><span>${s.detail}${s.latency_ms!=null?` · ${s.latency_ms} ms`:''}</span>
+        <a class="btn" href="${s.ui_url || s.url}" target="_blank" rel="noopener">Open ↗</a></div>
+      </div>`).join('');
+    document.getElementById('updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  }catch(e){
+    document.getElementById('grid').innerHTML = '<div class="desc">Failed to load service status.</div>';
+  }
+}
+load(); setInterval(load, 15000);
+</script>
+</body>
+</html>

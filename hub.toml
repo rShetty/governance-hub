@@ -1,0 +1,50 @@
+# Governance Hub configuration
+listen = "127.0.0.1:8600"
+
+[services.hive]
+label = "Hive"
+description = "Agent runtime & marketplace — delegations, teams, wallet"
+url = "http://127.0.0.1:8000"
+health_path = "/api/health"
+ui_path = "https://hive.rajeev.me"
+color = "#f59e0b"
+
+[services.patroclus]
+label = "Patroclus"
+description = "Authorization control plane — scoped tokens, approvals, audit"
+url = "http://127.0.0.1:8484"
+health_path = "/health/ready"
+ui_path = "http://127.0.0.1:8484/"
+color = "#6366f1"
+
+[services.relay]
+label = "Relay"
+description = "MCP gateway & tool proxy — connectors, permissions, consent"
+url = "http://127.0.0.1:8001"
+health_path = "/ready"
+ui_path = "http://127.0.0.1:8001/"
+color = "#06b6d4"
+
+[services.miser]
+label = "Miser"
+description = "LLM cost gateway — tier routing, budgets, cache"
+url = "http://127.0.0.1:8787"
+health_path = "/health/ready"
+ui_path = "http://127.0.0.1:8787/"
+color = "#34d399"
+
+[services.sentiel]
+label = "Sentiel"
+description = "Observability, DLP & compliance — events, violations, reports"
+url = "http://127.0.0.1:8585"
+health_path = "/health/ready"
+ui_path = "http://127.0.0.1:8585/"
+color = "#a855f7"
+
+[services.aegis]
+label = "Aegis"
+description = "Network egress control & attestation for agents"
+url = "http://127.0.0.1:8686"
+health_path = "/health/live"
+ui_path = "http://127.0.0.1:8686/"
+color = "#ef4444"
