@@ -26,6 +26,9 @@ fn test_state() -> AppState {
         services,
         listen: "127.0.0.1:0".into(),
         admin_token: Some("test-admin-token".into()),
+        oidc_issuer: None,
+        oidc_client_id: None,
+        oidc_client_secret: None,
     }
     .into_app_state()
 }
@@ -165,6 +168,9 @@ async fn proxy_disabled_without_token_config() {
         services,
         listen: "127.0.0.1:0".into(),
         admin_token: None, // env unset in tests → proxy must refuse
+        oidc_issuer: None,
+        oidc_client_id: None,
+        oidc_client_secret: None,
     }
     .into_app_state();
     let req = axum::http::Request::builder()
@@ -173,4 +179,59 @@ async fn proxy_disabled_without_token_config() {
         .unwrap();
     let resp = router(state).oneshot(req).await.unwrap();
     assert_eq!(resp.status(), axum::http::StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test]
+async fn console_endpoints_require_auth() {
+    let app = router(test_state());
+    // /api/me without session → 401
+    let req = axum::http::Request::builder()
+        .uri("/api/me")
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), axum::http::StatusCode::UNAUTHORIZED);
+    // identities without login → 401
+    let req = axum::http::Request::builder()
+        .uri("/api/console/identities")
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), axum::http::StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn login_redirects_to_idp_when_configured() {
+    // Config with an issuer pointing at a non-existent IdP: /login should
+    // attempt discovery and fail with BAD_GATEWAY (proves wiring).
+    let mut services = std::collections::HashMap::new();
+    services.insert(
+        "miser".to_string(),
+        governance_hub::config::ServiceConfig {
+            public_url: None,
+            url: "http://127.0.0.1:9".into(),
+            token: None,
+            api_token: None,
+            health_path: "/health".into(),
+            label: "M".into(),
+            description: "d".into(),
+            color: "#fff".into(),
+            ui_path: String::new(),
+        },
+    );
+    let state = Config {
+        services,
+        listen: "127.0.0.1:0".into(),
+        admin_token: Some("t".into()),
+        oidc_issuer: Some("http://127.0.0.1:1".into()),
+        oidc_client_id: Some("svc_x".into()),
+        oidc_client_secret: Some("s".into()),
+    }
+    .into_app_state();
+    let req = axum::http::Request::builder()
+        .uri("/login")
+        .body(Body::empty())
+        .unwrap();
+    let resp = router(state).oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), axum::http::StatusCode::BAD_GATEWAY);
 }

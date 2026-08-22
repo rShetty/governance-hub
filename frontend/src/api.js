@@ -30,3 +30,43 @@ export const fmtUsd = (n) =>
   n == null
     ? '—'
     : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
+
+// ---- Console: auth + administration ----
+
+export async function me() {
+  const r = await fetch(`${BASE}/api/me`)
+  if (r.status === 401) return null
+  if (!r.ok) throw new Error(`me: ${r.status}`)
+  return r.json()
+}
+
+export function loginUrl(next = '/') {
+  return `${BASE}/login?next=${encodeURIComponent(next)}`
+}
+export const logoutUrl = `${BASE}/logout`
+
+export async function identities() {
+  const r = await fetch(`${BASE}/api/console/identities`)
+  if (!r.ok) throw new Error(`identities: ${r.status}`)
+  return r.json()
+}
+
+export async function upsertService(svc) {
+  const r = await fetch(`${BASE}/api/console/services`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(svc),
+  })
+  const body = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(body.error || `upsert: ${r.status}`)
+  return body
+}
+
+export async function deleteService(id) {
+  const r = await fetch(`${BASE}/api/console/services/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
+  const body = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(body.error || `delete: ${r.status}`)
+  return body
+}

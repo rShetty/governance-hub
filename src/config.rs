@@ -13,6 +13,14 @@ pub struct Config {
     /// (503) entirely when unset — never ship an open proxy.
     #[serde(default)]
     pub admin_token: Option<String>,
+    /// Argus IdP issuer (e.g. https://id.rajeev.me). Login is enabled when set.
+    #[serde(default)]
+    pub oidc_issuer: Option<String>,
+    /// This hub's OIDC client credentials (from Argus `svc_…` registration).
+    #[serde(default)]
+    pub oidc_client_id: Option<String>,
+    #[serde(default)]
+    pub oidc_client_secret: Option<String>,
 }
 
 fn default_listen() -> String {
