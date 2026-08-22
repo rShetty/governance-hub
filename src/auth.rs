@@ -9,6 +9,10 @@ use serde::Deserialize;
 use std::collections::HashMap;
 
 pub const SESSION_COOKIE: &str = "hub_session";
+/// Argus (IdP) session cookie name — used for server-side passthrough when
+/// the hub calls IdP admin APIs on behalf of a logged-in admin.
+pub const ARGUS_SESSION_COOKIE: &str = "argus_session";
+pub const ARGUS_SESSION_COOKIE_PASSTHROUGH: &str = "argus_session";
 
 #[derive(Debug, Clone)]
 pub struct OidcConfig {
@@ -48,6 +52,10 @@ pub struct HubUser {
     pub email: String,
     pub name: String,
     pub is_admin: bool,
+    /// Argus session id captured at login — lets the hub call IdP admin
+    /// APIs server-side as this user.
+    #[serde(default)]
+    pub argus_sid: String,
 }
 
 /// Exchange an authorization code at the token endpoint (PKCE).
@@ -123,9 +131,8 @@ pub async fn verify_access_token(
         sub: data.claims.sub.clone(),
         email: data.claims.email.unwrap_or_default(),
         name: data.claims.name.unwrap_or_default(),
-        // Admin determination happens server-side per request via userinfo;
-        // default false here.
         is_admin: false,
+        argus_sid: String::new(),
     })
 }
 
@@ -201,6 +208,7 @@ pub async fn decode_and_build_user(
     http: &reqwest::Client,
     discovery: &Discovery,
     access_token: &str,
+    argus_sid: String,
 ) -> anyhow::Result<HubUser> {
     let claims: IdClaims = decode_id_claims(id_token)?;
     // Admin check via userinfo (IdP decides).
@@ -219,5 +227,6 @@ pub async fn decode_and_build_user(
         email: claims.email.unwrap_or_default(),
         name: claims.name.unwrap_or_default(),
         is_admin,
+        argus_sid,
     })
 }

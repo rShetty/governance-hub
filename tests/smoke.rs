@@ -39,6 +39,7 @@ fn session_cookie_for(state: &AppState, admin: bool) -> String {
         email: "test@test.dev".into(),
         name: "Test".into(),
         is_admin: admin,
+        argus_sid: String::new(),
     };
     format!("hub_session={}", state.sessions.put(user, 3600))
 }

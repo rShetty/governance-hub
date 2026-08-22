@@ -115,7 +115,11 @@ pub struct CallbackQuery {
     error: Option<String>,
 }
 
-pub async fn callback(State(state): State<AppState>, Query(q): Query<CallbackQuery>) -> Response {
+pub async fn callback(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<CallbackQuery>,
+) -> Response {
     let Some(oidc) = state.oidc() else {
         return err(StatusCode::SERVICE_UNAVAILABLE, "login not configured");
     };
@@ -159,12 +163,15 @@ pub async fn callback(State(state): State<AppState>, Query(q): Query<CallbackQue
         }
     };
 
-    // Derive the user from id_token claims; admin via IdP userinfo.
+    // Capture the IdP session id for server-side admin API calls, then
+    // derive the user from id_token claims; admin via IdP userinfo.
+    let argus_sid = cookie_of(&headers, auth::ARGUS_SESSION_COOKIE).unwrap_or_default();
     let user = match auth::decode_and_build_user(
         &tokens.id_token,
         &state.client,
         &discovery,
         &tokens.access_token,
+        argus_sid,
     )
     .await
     {
@@ -208,19 +215,26 @@ pub async fn me(headers: HeaderMap, State(state): State<AppState>) -> Response {
 // ---------------------------------------------------------------------------
 
 #[allow(clippy::result_large_err)]
-async fn argus_get(state: &AppState, path: &str) -> Result<serde_json::Value, Response> {
+async fn argus_get(
+    state: &AppState,
+    path: &str,
+    user_session: Option<&str>,
+) -> Result<serde_json::Value, Response> {
     let issuer = state
         .config
         .oidc_issuer
         .clone()
         .ok_or_else(|| err(StatusCode::SERVICE_UNAVAILABLE, "IdP not configured"))?;
-    // Auth for admin API: the hub's client credentials via Basic.
-    let cid = state.config.oidc_client_id.clone().unwrap_or_default();
-    let secret = state.config.oidc_client_secret.clone().unwrap_or_default();
-    let resp = state
-        .client
-        .get(format!("{issuer}{path}"))
-        .header("x-argus-admin", format!("{cid}:{secret}"))
+    // Argus admin API trusts its own session cookie — forward the admin's
+    // IdP session server-side so the IdP sees the real principal.
+    let mut req = state.client.get(format!("{issuer}{path}"));
+    if let Some(sid) = user_session {
+        req = req.header(
+            header::COOKIE,
+            format!("{}={}", auth::ARGUS_SESSION_COOKIE, sid),
+        );
+    }
+    let resp = req
         .send()
         .await
         .map_err(|_| err(StatusCode::BAD_GATEWAY, "IdP unreachable"))?;
@@ -242,9 +256,10 @@ pub async fn identities(State(state): State<AppState>, headers: HeaderMap) -> Re
     if !user.is_admin {
         return err(StatusCode::FORBIDDEN, "admin required");
     }
+    let argus_sid = user.argus_sid.clone();
     let (users, agents) = tokio::join!(
-        argus_get(&state, "/api/admin/users"),
-        argus_get(&state, "/api/admin/agents")
+        argus_get(&state, "/api/admin/users", Some(&argus_sid)),
+        argus_get(&state, "/api/admin/agents", Some(&argus_sid))
     );
     let users = users.unwrap_or_else(r_into_json);
     let agents = agents.unwrap_or_else(r_into_json);
