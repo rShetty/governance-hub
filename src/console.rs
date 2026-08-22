@@ -21,6 +21,11 @@ fn rand_state() -> String {
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(buf)
 }
 
+/// Public wrapper for other modules (bff) to read session cookies.
+pub fn cookie_value_pub(headers: &HeaderMap, name: &str) -> Option<String> {
+    cookie_of(headers, name)
+}
+
 fn cookie_of(headers: &HeaderMap, name: &str) -> Option<String> {
     headers
         .get(header::COOKIE)?

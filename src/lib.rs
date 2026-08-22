@@ -1,5 +1,6 @@
 pub mod assets;
 pub mod auth;
+pub mod bff;
 pub mod config;
 pub mod console;
 pub mod keys;
@@ -68,6 +69,17 @@ pub fn router(state: AppState) -> Router {
             "/api/svc/{service}/{*path}",
             get(proxy::proxy_get).post(proxy::proxy_post),
         )
+        .route("/api/bff/fleet", get(bff::fleet_overview))
+        .route("/api/bff/agents", post(bff::agents_create))
+        .route("/api/bff/mcp", get(bff::mcp_list).post(bff::mcp_create))
+        .route(
+            "/api/bff/policies",
+            get(bff::policy_list).post(bff::policy_create),
+        )
+        .route("/api/bff/activity", get(bff::activity_feed))
+        .route("/api/bff/cost", get(bff::cost_overview))
+        .route("/api/bff/tools", get(bff::tools_overview))
+        .route("/api/bff/proxy/{backend}/{*rest}", get(bff::passthrough))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             console::require_session,

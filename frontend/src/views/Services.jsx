@@ -64,7 +64,10 @@ export default function Services({ onChanged }) {
   const input = 'w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-sm text-slate-200 focus:outline-none focus:border-indigo-500'
 
   return (
-    <form onSubmit={submit} className="space-y-3 rounded-2xl border border-slate-800 p-5">
+    <div className="space-y-4">
+      <h1 className="h-display text-2xl">Service Registry</h1>
+      <p className="text-[13px] text-slate-500 mt-0.5">Register and manage the backends this console governs.</p>
+    <form onSubmit={submit} className="space-y-3 rounded-2xl border border-[#232833] p-5">
       <div className="grid md:grid-cols-2 gap-3">
         <label className="block">
           <span className="text-xs text-slate-500">id (a-z0-9-)</span>
@@ -124,5 +127,6 @@ export default function Services({ onChanged }) {
         Services persist under <code className="text-slate-500">/etc/governance-hub/services.d/&lt;id&gt;.toml</code> and appear on the board after the next probe cycle.
       </p>
     </form>
+    </div>
   )
 }
