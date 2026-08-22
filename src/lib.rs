@@ -1,4 +1,5 @@
 pub mod config;
+pub mod proxy;
 pub mod status;
 
 use axum::{
@@ -29,16 +30,19 @@ pub fn router(state: AppState) -> Router {
         .route("/", get(dashboard))
         .route("/api/services", get(services_status))
         .route("/health", get(health))
+        .route(
+            "/api/svc/{service}/{*path}",
+            get(proxy::proxy_get).post(proxy::proxy_post),
+        )
+        .layer(axum::middleware::map_response(|mut res: Response| async move {
+            let h = res.headers_mut();
+            h.insert(header::X_FRAME_OPTIONS, "DENY".parse().unwrap());
+            h.insert(header::X_CONTENT_TYPE_OPTIONS, "nosniff".parse().unwrap());
+            h.insert(header::REFERRER_POLICY, "no-referrer".parse().unwrap());
+            res
+        }))
+        .fallback(dashboard)
         .with_state(state)
-        .layer(axum::middleware::map_response(
-            |mut res: Response| async move {
-                res.headers_mut()
-                    .insert(header::X_CONTENT_TYPE_OPTIONS, "nosniff".parse().unwrap());
-                res.headers_mut()
-                    .insert(header::X_FRAME_OPTIONS, "DENY".parse().unwrap());
-                res
-            },
-        ))
 }
 
 async fn health() -> Json<serde_json::Value> {
@@ -76,5 +80,5 @@ async fn services_status(
 }
 
 async fn dashboard() -> Html<&'static str> {
-    Html(include_str!("../static/index.html"))
+    Html(include_str!("../frontend/dist/index.html"))
 }

@@ -24,6 +24,10 @@ pub struct ServiceConfig {
     /// Optional bearer token for server-side calls.
     #[serde(default)]
     pub token: Option<String>,
+    /// Bearer token the hub injects when proxying API calls to this service
+    /// (server-side only — never exposed to browsers).
+    #[serde(default)]
+    pub api_token: Option<String>,
     /// Health path probed for status cards.
     #[serde(default = "default_health")]
     pub health_path: String,

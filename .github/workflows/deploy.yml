@@ -17,6 +17,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Build React UI
+        working-directory: frontend
+        run: |
+          npm install --no-fund --no-audit
+          npm run build
       - name: Install Rust toolchain
         run: |
           rustup update stable
@@ -32,28 +40,42 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Build release binary (linux/amd64)
-        run: |
-          rustup target add x86_64-unknown-linux-gnu
-          cargo build --release --target x86_64-unknown-linux-gnu
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/setup-node@v4
         with:
-          name: governance-hub-bin
-          path: target/x86_64-unknown-linux-gnu/release/governance-hub
+          node-version: "20"
 
-      - name: Ship binary + config to VPS
+      - name: Install Rust toolchain (linux target)
+        run: |
+          rustup update stable
+          rustup target add x86_64-unknown-linux-gnu
+
+      - name: Build React UI
+        working-directory: frontend
+        run: |
+          npm install --no-fund --no-audit
+          npm run build
+
+      - name: Build release binary (UI embedded)
+        run: cargo build --release --target x86_64-unknown-linux-gnu
+
+      - name: Package delivery bundle
+        run: |
+          mkdir -p bundle
+          cp target/x86_64-unknown-linux-gnu/release/governance-hub bundle/
+          cp hub.toml bundle/
+          cp deploy/governance-hub.service bundle/
+          tar -czf governance-hub-bundle.tar.gz -C bundle .
+
+      - name: Ship bundle to VPS
         uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: "target/x86_64-unknown-linux-gnu/release/governance-hub,hub.toml,deploy/governance-hub.service"
-          target: /tmp/governance-hub-delivery
-          strip_components: 1
+          source: governance-hub-bundle.tar.gz
+          target: /tmp/
 
-      - name: Install, provision user, restart service
+      - name: Install, restart service, health-gate
         uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -61,25 +83,19 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             set -euo pipefail
-            install -m 755 /tmp/governance-hub-delivery/governance-hub /usr/local/bin/governance-hub
-            id govhub >/dev/null 2>&1 || useradd --system --home-dir /var/lib/governance-hub --create-home --shell /usr/sbin/nologin govhub
             mkdir -p /etc/governance-hub /var/lib/governance-hub
-            install -m 644 /tmp/governance-hub-delivery/hub.toml /etc/governance-hub/hub.toml
-            install -m 644 /tmp/governance-hub-delivery/governance-hub.service /etc/systemd/system/governance-hub.service
+            id govhub >/dev/null 2>&1 || useradd --system --home-dir /var/lib/governance-hub --create-home --shell /usr/sbin/nologin govhub
+            tar -xzf /tmp/governance-hub-bundle.tar.gz -C /tmp/gh-bundle-extract 2>/dev/null || {
+              mkdir -p /tmp/gh-bundle-extract
+              tar -xzf /tmp/governance-hub-bundle.tar.gz -C /tmp/gh-bundle-extract
+            }
+            install -m 755 /tmp/gh-bundle-extract/governance-hub /usr/local/bin/governance-hub
+            install -m 644 /tmp/gh-bundle-extract/hub.toml /etc/governance-hub/hub.toml
+            install -m 644 /tmp/gh-bundle-extract/governance-hub.service /etc/systemd/system/governance-hub.service
             chown -R govhub:govhub /var/lib/governance-hub
             systemctl daemon-reload
             systemctl enable governance-hub
             systemctl restart governance-hub
-            rm -rf /tmp/governance-hub-delivery
+            rm -rf /tmp/gh-bundle-extract /tmp/governance-hub-bundle.tar.gz
             sleep 3
             curl -sf http://127.0.0.1:8600/health && echo "HEALTH OK"
-
-      - name: Health verification
-        if: always()
-        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            curl -sf http://127.0.0.1:8600/health || { journalctl -u governance-hub -n 30 --no-pager; exit 1; }

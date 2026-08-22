@@ -14,6 +14,7 @@ fn test_state() -> AppState {
             public_url: None,
             url: "http://127.0.0.1:9".into(), // unreachable port
             token: None,
+            api_token: None,
             health_path: "/health".into(),
             label: "Unreachable Service".into(),
             description: "simulated outage".into(),
@@ -83,7 +84,8 @@ async fn services_status_reports_unreachable_as_degraded_not_error() {
 }
 
 #[tokio::test]
-async fn unknown_routes_404() {
-    let (status, _) = get(router(test_state()), "/nope").await;
-    assert_eq!(status, axum::http::StatusCode::NOT_FOUND);
+async fn unknown_routes_serve_spa_fallback() {
+    let (status, body) = get(router(test_state()), "/some/client/route").await;
+    assert_eq!(status, axum::http::StatusCode::OK);
+    assert!(body.contains("<html"), "SPA fallback expected");
 }
