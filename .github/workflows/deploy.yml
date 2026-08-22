@@ -44,7 +44,7 @@ jobs:
           path: target/x86_64-unknown-linux-gnu/release/governance-hub
 
       - name: Ship binary + config to VPS
-        uses: appleboy/scp-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
