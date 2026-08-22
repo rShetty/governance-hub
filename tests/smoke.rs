@@ -25,6 +25,7 @@ fn test_state() -> AppState {
     Config {
         services,
         listen: "127.0.0.1:0".into(),
+        admin_token: Some("test-admin-token".into()),
     }
     .into_app_state()
 }
@@ -121,4 +122,55 @@ async fn hashed_ui_assets_are_served_with_real_mime_types() {
         ct, "text/javascript",
         "module script must be JavaScript, not HTML (governance.rajeev.me MIME bug)"
     );
+}
+
+#[tokio::test]
+async fn proxy_requires_admin_token() {
+    let app = router(test_state());
+    // No token → 401
+    let req = axum::http::Request::builder()
+        .uri("/api/svc/miser/health/ready")
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), axum::http::StatusCode::UNAUTHORIZED);
+    // Wrong token → 401
+    let req = axum::http::Request::builder()
+        .uri("/api/svc/miser/health/ready")
+        .header("authorization", "Bearer wrong")
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), axum::http::StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn proxy_disabled_without_token_config() {
+    let mut services = std::collections::HashMap::new();
+    services.insert(
+        "miser".to_string(),
+        governance_hub::config::ServiceConfig {
+            public_url: None,
+            url: "http://127.0.0.1:9".into(),
+            token: None,
+            api_token: None,
+            health_path: "/health".into(),
+            label: "Miser".into(),
+            description: "test".into(),
+            color: "#000".into(),
+            ui_path: String::new(),
+        },
+    );
+    let state = Config {
+        services,
+        listen: "127.0.0.1:0".into(),
+        admin_token: None, // env unset in tests → proxy must refuse
+    }
+    .into_app_state();
+    let req = axum::http::Request::builder()
+        .uri("/api/svc/miser/health/ready")
+        .body(Body::empty())
+        .unwrap();
+    let resp = router(state).oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), axum::http::StatusCode::SERVICE_UNAVAILABLE);
 }

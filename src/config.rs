@@ -8,6 +8,11 @@ pub struct Config {
     pub services: HashMap<String, ServiceConfig>,
     #[serde(default = "default_listen")]
     pub listen: String,
+    /// Shared secret required on every `/api/svc/*` proxy call.
+    /// Falls back to `HUB_ADMIN_TOKEN` env when absent. Proxying is refused
+    /// (503) entirely when unset — never ship an open proxy.
+    #[serde(default)]
+    pub admin_token: Option<String>,
 }
 
 fn default_listen() -> String {

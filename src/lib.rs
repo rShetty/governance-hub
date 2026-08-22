@@ -27,15 +27,27 @@ impl AppState {
 }
 
 pub fn router(state: AppState) -> Router {
-    Router::new()
+    // Public surface: dashboard, static assets, status API, health probe.
+    let public = Router::new()
         .route("/", get(dashboard))
         .route("/assets/{*path}", get(assets::asset))
         .route("/api/services", get(services_status))
-        .route("/health", get(health))
+        .route("/health", get(health));
+
+    // Privileged surface: the service proxy. Gated behind the admin token —
+    // route_layer here scopes the middleware to these routes only.
+    let protected = Router::new()
         .route(
             "/api/svc/{service}/{*path}",
             get(proxy::proxy_get).post(proxy::proxy_post),
         )
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            proxy::require_admin_token,
+        ));
+
+    public
+        .merge(protected)
         .layer(axum::middleware::map_response(
             |mut res: Response| async move {
                 let h = res.headers_mut();

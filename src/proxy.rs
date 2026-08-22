@@ -5,12 +5,61 @@
 
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
-    response::IntoResponse,
+    http::{header, StatusCode},
+    middleware::Next,
+    response::{IntoResponse, Response},
 };
 use serde_json::json;
 
 use crate::AppState;
+
+/// Phase-0 hard gate on the service proxy: every `/api/svc/*` call must
+/// present `Authorization: Bearer <admin_token>` (config `admin_token`,
+/// falling back to env `HUB_ADMIN_TOKEN`). When no token is configured the
+/// proxy is disabled entirely — it must never be silently open.
+pub async fn require_admin_token(
+    State(state): State<AppState>,
+    request: axum::extract::Request,
+    next: Next,
+) -> Result<Response, (StatusCode, axum::Json<serde_json::Value>)> {
+    let configured = state
+        .config
+        .admin_token
+        .clone()
+        .or_else(|| std::env::var("HUB_ADMIN_TOKEN").ok());
+
+    let Some(expected) = configured.filter(|t| !t.is_empty()) else {
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            axum::Json(json!({"error": "proxy disabled: HUB_ADMIN_TOKEN not configured"})),
+        ));
+    };
+
+    let presented = request
+        .headers()
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "));
+
+    match presented {
+        Some(presented) if constant_time_eq(presented.as_bytes(), expected.as_bytes()) => {
+            Ok(next.run(request).await)
+        }
+        _ => Err((
+            StatusCode::UNAUTHORIZED,
+            axum::Json(json!({"error": "admin token required"})),
+        )),
+    }
+}
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    a.iter()
+        .zip(b.iter())
+        .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+        == 0
+}
 
 pub fn validate(
     service: &str,
