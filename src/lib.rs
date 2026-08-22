@@ -1,3 +1,4 @@
+pub mod assets;
 pub mod config;
 pub mod proxy;
 pub mod status;
@@ -28,6 +29,7 @@ impl AppState {
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/", get(dashboard))
+        .route("/assets/{*path}", get(assets::asset))
         .route("/api/services", get(services_status))
         .route("/health", get(health))
         .route(

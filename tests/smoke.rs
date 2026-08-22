@@ -89,3 +89,36 @@ async fn unknown_routes_serve_spa_fallback() {
     assert_eq!(status, axum::http::StatusCode::OK);
     assert!(body.contains("<html"), "SPA fallback expected");
 }
+
+#[tokio::test]
+async fn hashed_ui_assets_are_served_with_real_mime_types() {
+    let app = router(test_state());
+    // Discover the embedded JS bundle path from the built UI shell.
+    let html = {
+        let (_, body) = get(app.clone(), "/").await;
+        body
+    };
+    let src = html
+        .split("src=\"")
+        .nth(1)
+        .and_then(|s| s.split('"').next())
+        .expect("index.html must reference a module script");
+    assert!(src.starts_with("/assets/"), "unexpected script src: {src}");
+
+    let req = axum::http::Request::builder()
+        .uri(src)
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), axum::http::StatusCode::OK, "{src}");
+    let ct = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+    assert_eq!(
+        ct, "text/javascript",
+        "module script must be JavaScript, not HTML (governance.rajeev.me MIME bug)"
+    );
+}
