@@ -77,7 +77,7 @@ async fn backend_post(
 
 // env helpers ---------------------------------------------------------------
 
-fn svc_env(state: &AppState, key: &str) -> Option<String> {
+fn svc_env(_state: &AppState, key: &str) -> Option<String> {
     std::env::var(key).ok().filter(|v| !v.is_empty())
 }
 
