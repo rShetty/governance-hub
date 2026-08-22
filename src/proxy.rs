@@ -12,7 +12,10 @@ use serde_json::json;
 
 use crate::AppState;
 
-pub fn validate(service: &str, path: &str) -> Result<(), (StatusCode, axum::Json<serde_json::Value>)> {
+pub fn validate(
+    service: &str,
+    path: &str,
+) -> Result<(), (StatusCode, axum::Json<serde_json::Value>)> {
     if !state_has_service(service) {
         return Err((
             StatusCode::NOT_FOUND,
@@ -30,7 +33,10 @@ pub fn validate(service: &str, path: &str) -> Result<(), (StatusCode, axum::Json
 
 fn state_has_service(service: &str) -> bool {
     // Cheap compile-time-known registry; config presence checked at proxy time.
-    matches!(service, "hive" | "patroclus" | "relay" | "miser" | "sentiel" | "aegis")
+    matches!(
+        service,
+        "hive" | "patroclus" | "relay" | "miser" | "sentiel" | "aegis"
+    )
 }
 
 async fn forward(
@@ -62,9 +68,7 @@ async fn forward(
         req = req.bearer_auth(token);
     }
     if let Some(bytes) = body {
-        req = req
-            .header("content-type", "application/json")
-            .body(bytes);
+        req = req.header("content-type", "application/json").body(bytes);
     }
 
     let started = std::time::Instant::now();
@@ -75,7 +79,8 @@ async fn forward(
         )
     })?;
 
-    let status = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    let status =
+        StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
     let headers = resp.headers().clone();
     let bytes = resp.bytes().await.map_err(|_| {
         (
@@ -94,10 +99,7 @@ async fn forward(
     Ok(out)
 }
 
-pub async fn proxy_get(
-    state: State<AppState>,
-    path: Path<(String, String)>,
-) -> impl IntoResponse {
+pub async fn proxy_get(state: State<AppState>, path: Path<(String, String)>) -> impl IntoResponse {
     forward(state, path, axum::http::Method::GET, None).await
 }
 

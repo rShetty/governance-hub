@@ -34,13 +34,15 @@ pub fn router(state: AppState) -> Router {
             "/api/svc/{service}/{*path}",
             get(proxy::proxy_get).post(proxy::proxy_post),
         )
-        .layer(axum::middleware::map_response(|mut res: Response| async move {
-            let h = res.headers_mut();
-            h.insert(header::X_FRAME_OPTIONS, "DENY".parse().unwrap());
-            h.insert(header::X_CONTENT_TYPE_OPTIONS, "nosniff".parse().unwrap());
-            h.insert(header::REFERRER_POLICY, "no-referrer".parse().unwrap());
-            res
-        }))
+        .layer(axum::middleware::map_response(
+            |mut res: Response| async move {
+                let h = res.headers_mut();
+                h.insert(header::X_FRAME_OPTIONS, "DENY".parse().unwrap());
+                h.insert(header::X_CONTENT_TYPE_OPTIONS, "nosniff".parse().unwrap());
+                h.insert(header::REFERRER_POLICY, "no-referrer".parse().unwrap());
+                res
+            },
+        ))
         .fallback(dashboard)
         .with_state(state)
 }
