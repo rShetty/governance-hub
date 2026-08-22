@@ -218,23 +218,26 @@ pub async fn me(headers: HeaderMap, State(state): State<AppState>) -> Response {
 async fn argus_get(
     state: &AppState,
     path: &str,
-    user_session: Option<&str>,
+    _user_session: Option<&str>,
 ) -> Result<serde_json::Value, Response> {
     let issuer = state
         .config
         .oidc_issuer
         .clone()
         .ok_or_else(|| err(StatusCode::SERVICE_UNAVAILABLE, "IdP not configured"))?;
-    // Argus admin API trusts its own session cookie — forward the admin's
-    // IdP session server-side so the IdP sees the real principal.
-    let mut req = state.client.get(format!("{issuer}{path}"));
-    if let Some(sid) = user_session {
-        req = req.header(
-            header::COOKIE,
-            format!("{}={}", auth::ARGUS_SESSION_COOKIE, sid),
-        );
-    }
-    let resp = req
+    // Server-to-server: the hub authenticates as a registered confidential
+    // client (Basic) — Argus trusts it for directory reads.
+    use base64::Engine as _;
+    let creds = format!(
+        "{}:{}",
+        state.config.oidc_client_id.as_deref().unwrap_or(""),
+        state.config.oidc_client_secret.as_deref().unwrap_or("")
+    );
+    let basic = base64::engine::general_purpose::STANDARD.encode(creds);
+    let resp = state
+        .client
+        .get(format!("{issuer}{path}"))
+        .header(header::AUTHORIZATION, format!("Basic {basic}"))
         .send()
         .await
         .map_err(|_| err(StatusCode::BAD_GATEWAY, "IdP unreachable"))?;
