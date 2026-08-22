@@ -4,7 +4,7 @@ listen = "127.0.0.1:8600"
 [services.hive]
 label = "Hive"
 description = "Agent runtime & marketplace — delegations, teams, wallet"
-url = "http://127.0.0.1:8000"
+url = "http://127.0.0.1:8080"
 health_path = "/api/health"
 ui_path = "https://hive.rajeev.me"
 color = "#f59e0b"
@@ -20,9 +20,9 @@ color = "#6366f1"
 [services.relay]
 label = "Relay"
 description = "MCP gateway & tool proxy — connectors, permissions, consent"
-url = "http://127.0.0.1:8001"
+url = "http://127.0.0.1:8000"
 health_path = "/ready"
-ui_path = "http://127.0.0.1:8001/"
+ui_path = "https://relay.rajeev.me"
 color = "#06b6d4"
 
 [services.miser]
