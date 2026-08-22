@@ -419,3 +419,35 @@ pub async fn service_delete(
         Err(_) => err(StatusCode::NOT_FOUND, "no such service file"),
     }
 }
+
+// ---------------------------------------------------------------------------
+// Global auth gate — unauthenticated browsers go to Argus; APIs get 401.
+// ---------------------------------------------------------------------------
+
+pub async fn require_session(
+    State(state): State<AppState>,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response {
+    let headers = request.headers().clone();
+    if current_user(&state, &headers).await.is_some() {
+        return next.run(request).await;
+    }
+    let wants_html = request
+        .headers()
+        .get(header::ACCEPT)
+        .and_then(|v| v.to_str().ok())
+        .map(|a| a.contains("text/html"))
+        .unwrap_or(false);
+    if wants_html {
+        // Preserve where the user was heading so login can bounce back.
+        let path = request
+            .uri()
+            .path_and_query()
+            .map(|p| p.as_str())
+            .unwrap_or("/");
+        Redirect::to(&format!("/login?next={}", urlencoding_escape(path))).into_response()
+    } else {
+        err(StatusCode::UNAUTHORIZED, "login required")
+    }
+}

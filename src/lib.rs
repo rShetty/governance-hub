@@ -44,29 +44,18 @@ impl AppState {
 }
 
 pub fn router(state: AppState) -> Router {
-    // Public surface: dashboard, static assets, status API, health probe.
+    // Public surface (no login): health probe + the OIDC dance itself.
     let public = Router::new()
+        .route("/health", get(health))
+        .route("/login", get(console::login))
+        .route("/auth/callback", get(console::callback));
+
+    // Authenticated surface — everything else. A middleware redirects
+    // unauthenticated browsers to Argus; API clients get a JSON 401.
+    let app_routes = Router::new()
         .route("/", get(dashboard))
         .route("/assets/{*path}", get(assets::asset))
         .route("/api/services", get(services_status))
-        .route("/health", get(health));
-
-    // Privileged surface: the service proxy. Gated behind the admin token —
-    // route_layer here scopes the middleware to these routes only.
-    let protected = Router::new()
-        .route(
-            "/api/svc/{service}/{*path}",
-            get(proxy::proxy_get).post(proxy::proxy_post),
-        )
-        .route_layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            proxy::require_admin_token,
-        ));
-
-    // Console surface: OIDC login + admin management.
-    let console = Router::new()
-        .route("/login", get(console::login))
-        .route("/auth/callback", get(console::callback))
         .route("/logout", post(console::logout))
         .route("/api/me", get(console::me))
         .route("/api/console/identities", get(console::identities))
@@ -74,11 +63,18 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/console/services",
             post(console::service_upsert).delete(console::service_delete),
-        );
+        )
+        .route(
+            "/api/svc/{service}/{*path}",
+            get(proxy::proxy_get).post(proxy::proxy_post),
+        )
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            console::require_session,
+        ));
 
     public
-        .merge(protected)
-        .merge(console)
+        .merge(app_routes)
         .layer(axum::middleware::map_response(
             |mut res: Response| async move {
                 let h = res.headers_mut();
