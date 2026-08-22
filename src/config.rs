@@ -67,6 +67,23 @@ fn default_color() -> String {
 impl Config {
     pub fn load(path: &str) -> anyhow::Result<Self> {
         let raw = std::fs::read_to_string(path)?;
-        Ok(toml::from_str(&raw)?)
+        let mut cfg: Config = toml::from_str(&raw)?;
+        // Secrets may live in the environment (env-file) rather than toml.
+        if let Ok(v) = std::env::var("HUB_OIDC_ISSUER") {
+            if !v.is_empty() {
+                cfg.oidc_issuer = Some(v);
+            }
+        }
+        if let Ok(v) = std::env::var("HUB_OIDC_CLIENT_ID") {
+            if !v.is_empty() {
+                cfg.oidc_client_id = Some(v);
+            }
+        }
+        if let Ok(v) = std::env::var("HUB_OIDC_CLIENT_SECRET") {
+            if !v.is_empty() {
+                cfg.oidc_client_secret = Some(v);
+            }
+        }
+        Ok(cfg)
     }
 }
