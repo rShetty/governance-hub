@@ -1,49 +1,49 @@
-import { useSvc, Panel, Table, Guard } from '../components.jsx'
-import { fmtInt } from '../api.js'
+import { useEffect, useState } from 'react'
 
 export default function Cost() {
-  const { data, error, loading } = useSvc('miser', [
-    ['keys', '/admin/keys'],
-    ['audit', '/admin/audit/verify'],
-  ])
+  const [state, setState] = useState({ data: null, err: '' })
+  useEffect(() => {
+    fetch('/api/bff/cost')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`status ${r.status}`))))
+      .then((d) => setState({ data: d, err: '' }))
+      .catch((e) => setState({ data: null, err: String(e.message || e) }))
+  }, [])
 
-  const keys = Array.isArray(data.keys) ? data.keys : []
-  const chain = data.audit ?? {}
+  const keys = Array.isArray(state.data?.keys) ? state.data.keys : []
 
   return (
-    <div className="space-y-6 fade-up">
+    <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">💸 Cost &amp; Routing</h1>
-        <p className="text-slate-400 mt-1">Miser — complexity-tiered routing, per-key budgets, semantic cache.</p>
+        <h1 className="h-display text-2xl">Cost &amp; Routing</h1>
+        <p className="text-[13px] text-slate-500 mt-0.5">
+          Miser gateway — tier routing, budgets and API keys per principal.
+        </p>
       </div>
-      <Guard loading={loading} error={error}>
-        <div className="grid md:grid-cols-3 gap-4">
-          <Panel title="API keys"><p className="text-3xl font-bold text-indigo-400">{fmtInt(keys.length)}</p></Panel>
-          <Panel title="Active"><p className="text-3xl font-bold text-emerald-400">{keys.filter((k) => k.active).length}</p></Panel>
-          <Panel title="Audit chain">
-            <p className={`text-sm mt-2 ${chain.valid ? 'text-emerald-400' : 'text-slate-400'}`}>
-              {chain.valid != null
-                ? `${chain.valid ? '✓ intact' : '✗ broken'} · ${chain.entries ?? 0} entries`
-                : '—'}
-            </p>
-          </Panel>
+      {state.err && <div className="panel p-4 text-[13px] text-amber-400/90">Miser unavailable — {state.err}</div>}
+      <section className="panel overflow-hidden">
+        <div className="px-4 py-3 border-b border-[#232833] flex items-center justify-between">
+          <span className="label">Provisioned keys</span>
+          <span className="num text-[11px] text-slate-600">{keys.length}</span>
         </div>
-
-        <Panel title="Keys &amp; quotas" subtitle="Tier allowlists, RPM caps and monthly budgets are enforced at the gateway">
-          <Table
-            cols={['ID', 'Owner', 'Tiers', 'RPM cap', 'Monthly budget', 'Status']}
-            rows={keys.map((k) => ({
-              ID: (k.id ?? '').slice(0, 14),
-              Owner: k.owner,
-              Tiers: (k.allowed_tiers ?? []).join(', ') || 'all',
-              'RPM cap': k.rate_limit_rpm ?? '∞',
-              'Monthly budget': k.monthly_budget_usd != null ? `$${k.monthly_budget_usd}` : '—',
-              Status: k.active ? 'active' : 'inactive',
-            }))}
-            empty="No API keys provisioned."
-          />
-        </Panel>
-      </Guard>
+        <table className="data">
+          <thead><tr><th>Key</th><th>Owner</th><th>Tier</th><th>Status</th></tr></thead>
+          <tbody>
+            {keys.map((k) => (
+              <tr key={k.id ?? k.key_id}>
+                <td className="text-slate-200 font-mono text-xs">{k.name ?? k.key_id}</td>
+                <td className="text-slate-500">{k.owner ?? '—'}</td>
+                <td><span className="badge badge-mono !text-[10px]">{k.tier ?? 'standard'}</span></td>
+                <td><span className="badge badge-ok">active</span></td>
+              </tr>
+            ))}
+            {!keys.length && !state.err && (
+              <tr><td colSpan="4" className="text-center py-8 text-slate-600">
+                No API keys yet — keys provisioned via the Miser API appear here with their spend attribution.
+              </td></tr>
+            )}
+          </tbody>
+        </table>
+      </section>
     </div>
   )
 }

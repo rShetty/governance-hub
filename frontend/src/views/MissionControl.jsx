@@ -1,15 +1,28 @@
 import { useEffect, useState } from 'react'
-import { fetchServices } from '../api.js'
+import { fetchServices, svcGet } from '../api.js'
 
 function useFleet() {
   const [services, setServices] = useState(null)
   const [err, setErr] = useState('')
+  const [kpi, setKpi] = useState({ agents: null, spend: null, alerts: null })
   useEffect(() => {
     fetchServices().then(setServices).catch((e) => setErr(String(e.message || e)))
+    // KPI band: agent identities from Argus dir, spend from Miser, alerts from Sentiel
+    svcGet('hive', '/api/agents')
+      .then((d) => setKpi((k) => ({ ...k, agents: (d.items ?? d.agents ?? []).length })))
+      .catch(() => setKpi((k) => ({ ...k, agents: '—' })))
+    fetch('/api/bff/fleet').then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (!d) return
+      const keys = d.miser?.stats?.keys
+      setKpi((k) => ({ ...k, spend: Array.isArray(keys) ? keys.length + ' keys' : '—' }))
+      const evs = d.sentiel?.events
+      const alerts = Array.isArray(evs) ? evs.length : null
+      setKpi((k) => ({ ...k, alerts: alerts ?? '—' }))
+    }).catch(() => {})
     const t = setInterval(() => fetchServices().then(setServices).catch(() => {}), 15000)
     return () => clearInterval(t)
   }, [])
-  return { services, err }
+  return { services, err, kpi }
 }
 
 function HealthRow({ s }) {
@@ -25,7 +38,7 @@ function HealthRow({ s }) {
 }
 
 export default function MissionControl() {
-  const { services, err } = useFleet()
+  const { services, err, kpi } = useFleet()
   const list = services?.services ?? []
   const up = list.filter((s) => s.healthy).length
 
@@ -44,15 +57,15 @@ export default function MissionControl() {
         </div>
         <div className="bg-[#10131a] p-5">
           <div className="label mb-2">Agent identities</div>
-          <div className="num text-[28px] leading-none text-slate-100" id="kpi-agents">—</div>
+          <div className="num text-[28px] leading-none text-slate-100">{kpi.agents ?? '—'}</div>
         </div>
         <div className="bg-[#10131a] p-5">
           <div className="label mb-2">Spend today</div>
-          <div className="num text-[28px] leading-none text-teal-300" id="kpi-spend">—</div>
+          <div className="num text-[28px] leading-none text-teal-300">{kpi.spend ?? '—'}</div>
         </div>
         <div className="bg-[#10131a] p-5">
           <div className="label mb-2">Open alerts</div>
-          <div className="num text-[28px] leading-none text-slate-100" id="kpi-alerts">—</div>
+          <div className="num text-[28px] leading-none text-slate-100">{kpi.alerts ?? '—'}</div>
         </div>
       </div>
 

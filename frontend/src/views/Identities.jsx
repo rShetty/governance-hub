@@ -26,6 +26,10 @@ export default function Identities() {
 
   return (
     <div className="space-y-4">
+      <div>
+        <h1 className="h-display text-2xl">Identity Directory</h1>
+        <p className="text-[13px] text-slate-500 mt-0.5">Every human and machine principal in the ecosystem, from Argus.</p>
+      </div>
       <div className="flex gap-2">
         {['humans', 'agents'].map((t) => (
           <button

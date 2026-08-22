@@ -19,9 +19,12 @@ export default function AgentsView() {
       .catch((e) => setDir({ data: null, err: String(e.message || e) }))
   }, [])
 
-  const runtimeAgents = Array.isArray(hive.data)
+  const runtimeRaw = Array.isArray(hive.data)
     ? hive.data
     : (hive.data?.items ?? hive.data?.agents ?? [])
+  const runtimeAgents = [...runtimeRaw].sort(
+    (a, b) => String(b.created_at ?? '').localeCompare(String(a.created_at ?? '')),
+  )
   const agents = Array.isArray(dir.data?.agents) ? dir.data.agents : []
 
   return (
