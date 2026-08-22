@@ -5,6 +5,9 @@ After=network-online.target
 [Service]
 User=govhub
 Environment=RUST_LOG=info
+# Operators: put HUB_ADMIN_TOKEN (and other secrets) here —
+#   sudo tee /etc/governance-hub/env <<< "HUB_ADMIN_TOKEN=$(openssl rand -hex 32)"
+EnvironmentFile=-/etc/governance-hub/env
 ExecStart=/usr/local/bin/governance-hub /etc/governance-hub/hub.toml
 Restart=always
 NoNewPrivileges=true

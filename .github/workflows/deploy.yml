@@ -92,6 +92,10 @@ jobs:
             install -m 755 /tmp/gh-bundle-extract/governance-hub /usr/local/bin/governance-hub
             install -m 644 /tmp/gh-bundle-extract/hub.toml /etc/governance-hub/hub.toml
             install -m 644 /tmp/gh-bundle-extract/governance-hub.service /etc/systemd/system/governance-hub.service
+            if [ ! -s /etc/governance-hub/env ]; then
+              echo "HUB_ADMIN_TOKEN=$(openssl rand -hex 32)" > /etc/governance-hub/env
+              chmod 600 /etc/governance-hub/env
+            fi
             chown -R govhub:govhub /var/lib/governance-hub
             systemctl daemon-reload
             systemctl enable governance-hub
