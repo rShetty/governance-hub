@@ -110,7 +110,7 @@ pub async fn fleet_overview(State(state): State<AppState>, headers: HeaderMap) -
     let s_tok = svc_env(&state, "SENTIEL_ADMIN_TOKEN");
     let a_tok = svc_env(&state, "AEGIS_ADMIN_TOKEN");
 
-    let hive_agents = backend_get(&state, format!("{}/api/agent/list", hive_url()), None);
+    let hive_agents = backend_get(&state, format!("{}/api/agents", hive_url()), None);
     let patroclus = backend_get(
         &state,
         format!("{}/v1/admin/agents", patroclus_url()),
@@ -123,15 +123,20 @@ pub async fn fleet_overview(State(state): State<AppState>, headers: HeaderMap) -
     );
     let sentiel_events = backend_get(
         &state,
-        format!("{}/events?limit=20", sentiel_url()),
+        format!("{}/api/events?limit=20", sentiel_url()),
         s_tok.as_deref(),
     );
     let aegis_log = backend_get(
         &state,
-        format!("{}/egress_log?limit=20", aegis_url()),
+        format!("{}/api/egress/log?limit=20", aegis_url()),
         a_tok.as_deref(),
     );
-    let miser_stats = backend_get(&state, format!("{}/admin/stats", miser_url()), None);
+    let m_tok = svc_env(&state, "MISER_ADMIN_KEY");
+    let miser_stats = backend_get(
+        &state,
+        format!("{}/admin/keys", miser_url()),
+        m_tok.as_deref(),
+    );
 
     let (ha, pa, po, se, ae, mi) = tokio::join!(
         hive_agents,
@@ -384,13 +389,13 @@ pub async fn activity_feed(
     let a_tok = svc_env(&state, "AEGIS_ADMIN_TOKEN");
     let ev = backend_get(
         &state,
-        format!("{}/events?limit={}", sentiel_url(), q.limit),
+        format!("{}/api/events?limit={}", sentiel_url(), q.limit),
         s_tok.as_deref(),
     )
     .await;
     let vg = backend_get(
         &state,
-        format!("{}/egress_log?limit={}", aegis_url(), q.limit),
+        format!("{}/api/egress/log?limit={}", aegis_url(), q.limit),
         a_tok.as_deref(),
     )
     .await;
@@ -434,7 +439,13 @@ pub async fn cost_overview(State(state): State<AppState>, headers: HeaderMap) ->
     if let Err(r) = require_admin(&state, &headers).await {
         return r;
     }
-    match backend_get(&state, format!("{}/admin/stats", miser_url()), None).await {
+    match backend_get(
+        &state,
+        format!("{}/admin/keys", miser_url()),
+        svc_env(&state, "MISER_ADMIN_KEY").as_deref(),
+    )
+    .await
+    {
         Ok(v) => Json(v).into_response(),
         Err(e) => now_err(StatusCode::BAD_GATEWAY, &format!("miser: {e}")),
     }
