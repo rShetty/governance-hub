@@ -207,6 +207,7 @@ pub async fn me(headers: HeaderMap, State(state): State<AppState>) -> Response {
 // Identity directory (proxied to Argus admin API with the service token)
 // ---------------------------------------------------------------------------
 
+#[allow(clippy::result_large_err)]
 async fn argus_get(state: &AppState, path: &str) -> Result<serde_json::Value, Response> {
     let issuer = state
         .config
@@ -349,6 +350,7 @@ fn valid_service(id: &str) -> bool {
         && id.len() <= 40
 }
 
+#[allow(clippy::result_large_err)]
 async fn require_admin_user(
     state: &AppState,
     headers: &HeaderMap,
