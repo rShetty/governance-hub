@@ -93,6 +93,7 @@ async fn forward(
     Path((service, rest)): Path<(String, String)>,
     method: axum::http::Method,
     body: Option<axum::body::Bytes>,
+    caller_auth: Option<String>,
 ) -> Result<axum::response::Response, (StatusCode, axum::Json<serde_json::Value>)> {
     validate(&service, &rest)?;
 
@@ -113,8 +114,17 @@ async fn forward(
         axum::http::Method::POST => state.client.post(&url),
         _ => state.client.get(&url),
     };
-    if let Some(token) = &cfg.api_token {
-        req = req.bearer_auth(token);
+    // Prefer the configured service token; otherwise pass through the
+    // caller's own Authorization (e.g. a Hive JWT arriving via the console).
+    match &cfg.api_token {
+        Some(token) => {
+            req = req.bearer_auth(token);
+        }
+        None => {
+            if let Some(auth) = caller_auth {
+                req = req.header("authorization", auth);
+            }
+        }
     }
     if let Some(bytes) = body {
         req = req.header("content-type", "application/json").body(bytes);
@@ -148,16 +158,43 @@ async fn forward(
     Ok(out)
 }
 
-pub async fn proxy_get(state: State<AppState>, path: Path<(String, String)>) -> impl IntoResponse {
-    forward(state, path, axum::http::Method::GET, None).await
+pub async fn proxy_get(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    path: Path<(String, String)>,
+) -> impl IntoResponse {
+    let caller_auth = headers
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .map(String::from);
+    forward(
+        State(state),
+        path,
+        axum::http::Method::GET,
+        None,
+        caller_auth,
+    )
+    .await
 }
 
 #[axum::debug_handler]
 pub async fn proxy_post(
-    state: State<AppState>,
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
     path: Path<(String, String)>,
     body: axum::body::Bytes,
 ) -> impl IntoResponse {
     let body = if body.is_empty() { None } else { Some(body) };
-    forward(state, path, axum::http::Method::POST, body).await
+    let caller_auth = headers
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .map(String::from);
+    forward(
+        State(state),
+        path,
+        axum::http::Method::POST,
+        body,
+        caller_auth,
+    )
+    .await
 }

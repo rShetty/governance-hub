@@ -21,7 +21,7 @@ export default function AgentsView() {
 
   const runtimeAgents = Array.isArray(hive.data)
     ? hive.data
-    : hive.data?.agents ?? hive.data?.agents?.agents ?? []
+    : (hive.data?.items ?? hive.data?.agents ?? [])
   const agents = Array.isArray(dir.data?.agents) ? dir.data.agents : []
 
   return (

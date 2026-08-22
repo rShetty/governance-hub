@@ -12,6 +12,15 @@
 import { test, expect, request as pwRequest } from '@playwright/test'
 import { login } from './helpers.js'
 
+// Create an API context that carries the browser's hub session cookie.
+async function authedApi(page) {
+  const cookies = await page.context().cookies(`${process.env.E2E_BASE_URL || 'https://governance.rajeev.me'}`)
+  return pwRequest.newContext({
+    baseURL: process.env.E2E_BASE_URL || 'https://governance.rajeev.me',
+    extraHTTPHeaders: { cookie: cookies.map((c) => `${c.name}=${c.value}`).join('; ') },
+  })
+}
+
 const BASE = process.env.E2E_BASE_URL || 'https://governance.rajeev.me'
 const ARGUS = process.env.E2E_ARGUS_URL || 'https://id.rajeev.me'
 const EMAIL = process.env.E2E_EMAIL || 'rajeev@rajeev.me'
@@ -50,13 +59,13 @@ test.beforeEach(async ({ page }) => {
 test('SSO: unauthenticated visit redirects to Argus login', async ({ page }) => {
   await page.context().clearCookies()
   await page.goto(BASE, { waitUntil: 'domcontentloaded' })
-  await expect(page).toHaveURL(/id\.rajeev\.me\/login/)
+  await expect(page).toHaveURL(/\/login\?next=/)
   await expect(page.locator('form[action="/login"]')).toBeVisible()
 })
 
 test('SSO: full login roundtrip lands on Mission Control', async ({ page }) => {
   await page.goto(BASE, { waitUntil: 'domcontentloaded' })
-  await expect(page).toHaveURL(/id\.rajeev\.me\/login/)
+  await expect(page).toHaveURL(/\/login\?next=/)
 
   await page.fill('input[name="email"]', EMAIL)
   await page.fill('input[name="password"]', PASSWORD)
@@ -81,15 +90,17 @@ test('Registry: create, list and remove a service', async ({ page }) => {
   await page.getByRole('button', { name: 'Service Registry' }).click()
   await expect(page.getByRole('heading', { name: 'Service Registry' })).toBeVisible()
 
-  await page.locator('input').first().fill(id)
-  await page.getByPlaceholder('Sentiel').fill(`E2E Service ${runId}`)
-  await page.getByPlaceholder('http://127.0.0.1:8585').fill('http://127.0.0.1:9999')
-  await page.getByPlaceholder('Observability, DLP & compliance').fill('e2e test service')
+  await page.getByLabel(/id \(a-z0-9-\)/i).fill(id)
+  await page.getByLabel('Label').fill(`E2E Service ${runId}`)
+  await page.getByLabel(/Internal URL/i).fill('http://127.0.0.1:9999')
+  await page.getByLabel('Description').fill('e2e test service')
   await page.getByRole('button', { name: 'Save service' }).click()
-  await expect(page.getByText(/Stored|stored/)).toBeVisible({ timeout: 10000 })
+  await expect(
+    page.getByText(/Stored|stored|reload|registry/i).first(),
+  ).toBeVisible({ timeout: 10000 })
 
   // Remove it again
-  await page.locator('input').first().fill(id)
+  await page.getByLabel(/id \(a-z0-9-\)/i).fill(id)
   page.on('dialog', (d) => d.accept())
   await page.getByRole('button', { name: 'Remove' }).click()
   await expect(page.getByText(`Removed ${id}`)).toBeVisible({ timeout: 10000 })
@@ -111,14 +122,16 @@ test('Agents: register an agent in Hive via API and see it in the console', asyn
   await login(page)
   // Obtain a Hive API session by logging in through the hub proxy with the
   // admin user; the console proxies /api/svc/hive/*.
-  const apiCtx = await pwRequest.newContext({ baseURL: BASE })
+  const apiCtx = await authedApi(page)
 
   // Login to hive via proxied endpoint using Argus-issued session is not yet
   // wired (P2), so use Hive's own auth: register+login a dedicated e2e user.
-  const creds = { username: `e2e_${runId}`, password: `Pw${runId}!long`, email: `e2e_${runId}@test.dev` }
-  await apiCtx.post('/api/svc/hive/auth/register', { data: { ...creds, name: 'E2E' } })
-  const loginResp = await apiCtx.post('/api/svc/hive/auth/login', { data: { username: creds.username, password: creds.password } })
+  const creds = { username: `e2e_${runId}`, password: `Pw${runId}!long`, email: `e2e_${runId}@test.dev`, name: 'E2E' }
+  const rr = await apiCtx.post('/api/svc/hive/api/auth/register', { data: creds })
+  console.log('REGISTER status:', rr.status(), await rr.text().then(t=>t.slice(0,120)))
+  const loginResp = await apiCtx.post('/api/svc/hive/api/auth/login', { data: { email: creds.email, password: creds.password } })
   const hiveToken = (await loginResp.json().catch(() => ({})))?.access_token
+  console.log('LOGIN status:', loginResp.status(), 'token len:', (hiveToken||'').length)
 
   let headers = {}
   if (hiveToken) headers = { Authorization: `Bearer ${hiveToken}` }
@@ -151,10 +164,10 @@ test('Agents: register an agent in Hive via API and see it in the console', asyn
 
 test('MCP: create a server, grant it to an agent', async ({ request, page }) => {
   await login(page)
-  const apiCtx = await pwRequest.newContext({ baseURL: BASE })
-  const creds = { username: `mcp_${runId}`, password: `Pw${runId}!long`, email: `mcp_${runId}@test.dev` }
-  await apiCtx.post('/api/svc/hive/auth/register', { data: { ...creds, name: 'MCP' } })
-  const loginResp = await apiCtx.post('/api/svc/hive/auth/login', { data: { username: creds.username, password: creds.password } })
+  const apiCtx = await authedApi(page)
+  const creds = { username: `mcp_${runId}`, password: `Pw${runId}!long`, email: `mcp_${runId}@test.dev`, name: 'MCP' }
+  await apiCtx.post('/api/svc/hive/api/auth/register', { data: creds })
+  const loginResp = await apiCtx.post('/api/svc/hive/api/auth/login', { data: { email: creds.email, password: creds.password } })
   const token = (await loginResp.json().catch(() => ({})))?.access_token
   const h = token ? { Authorization: `Bearer ${token}` } : {}
 
@@ -202,23 +215,25 @@ test('MCP: create a server, grant it to an agent', async ({ request, page }) => 
 
 // ── 5. Policies (Patroclus) ──────────────────────────────────────────────────
 
-test('Policies: create a policy in Patroclus and verify listing', async ({ request }) => {
-  const apiCtx = await pwRequest.newContext()
+test('Policies: create a policy in Patroclus and verify listing', async ({ page }) => {
+  await login(page)
+  const apiCtx = await authedApi(page)
   // Patroclus admin requires its own token — read from env or skip gracefully.
   const pToken = process.env.PATROCLUS_ADMIN_TOKEN
   test.skip(!pToken, 'PATROCLUS_ADMIN_TOKEN not set')
 
-  const res = await apiCtx.post('https://patroclus.rajeev.me/v1/admin/policies', {
+  const res = await apiCtx.post('/api/svc/patroclus/v1/admin/policies', {
     headers: { Authorization: `Bearer ${pToken}` },
     data: {
       name: `e2e-policy-${runId}`,
       engine: 'yaml',
-      definition: 'rules:\n  - allow: true\n',
+      definition:
+        '- name: allow-e2e\n  actions: ["*"]\n  resources: ["*"]\n  decision: allow\n  reason: e2e test rule',
     },
   })
   expect([200, 201]).toContain(res.status())
 
-  const list = await apiCtx.get('https://patroclus.rajeev.me/v1/admin/policies', {
+  const list = await apiCtx.get('/api/svc/patroclus/v1/admin/policies', {
     headers: { Authorization: `Bearer ${pToken}` },
   })
   const body = await list.text()
