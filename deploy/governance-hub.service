@@ -1,21 +1,15 @@
 [Unit]
-Description=Governance Hub — unified AI governance console
+Description=Governance Hub
 After=network-online.target
-Wants=network-online.target
 
 [Service]
-Type=simple
 User=govhub
-Group=govhub
-Environment="RUST_LOG=info"
+Environment=RUST_LOG=info
 ExecStart=/usr/local/bin/governance-hub /etc/governance-hub/hub.toml
 Restart=always
-RestartSec=3
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/var/lib/governance-hub
 
 [Install]
 WantedBy=multi-user.target

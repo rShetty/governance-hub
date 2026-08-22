@@ -1,0 +1,57 @@
+name: Deploy Governance Hub
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: governance-hub-production
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install Rust toolchain
+        run: |
+          rustup update stable
+          rustup component add rustfmt clippy
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+
+  deploy:
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            if [ ! -d /opt/governance-hub/.git ]; then
+              git clone https://github.com/rShetty/governance-hub.git /opt/governance-hub
+            fi
+            cd /opt/governance-hub
+            git fetch origin main
+            git reset --hard origin/main
+            source "$HOME/.cargo/env"
+            cargo build --release
+            install -m 755 target/release/governance-hub /usr/local/bin/governance-hub
+            mkdir -p /etc/governance-hub
+            cp hub.toml /etc/governance-hub/hub.toml
+            systemctl daemon-reload
+            systemctl enable governance-hub
+            systemctl restart governance-hub
+            sleep 3
+            curl -sf http://127.0.0.1:8600/health
