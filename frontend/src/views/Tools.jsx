@@ -3,21 +3,33 @@ import { svcGet, fmtInt } from '../api.js'
 
 function useBff() {
   const [state, setState] = useState({ data: null, err: '' })
+  const [reloadKey, setReloadKey] = useState(0)
   useEffect(() => {
     fetch('/api/bff/tools')
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`tools: ${r.status}`))))
       .then((d) => setState({ data: d, err: '' }))
       .catch((e) => setState({ data: null, err: String(e.message || e) }))
+  }, [reloadKey])
+  return { ...state, reload: () => setReloadKey((k) => k + 1) }
+}
+
+function useSvcRelay() {
+  const [s, setS] = useState({ data: null, err: '' })
+  useEffect(() => {
+    svcGet('relay', '/health')
+      .then((d) => setS({ data: d, err: '' }))
+      .catch((e) => setS({ data: null, err: String(e.message || e) }))
   }, [])
-  return state
+  return s
 }
 
 export default function Tools() {
   const relay = useSvcRelay()
   const bff = useBff()
+  const [showForm, setShowForm] = useState(false)
+  const [extra, setExtra] = useState([])
 
   const tools = Array.isArray(bff.data?.tools) ? bff.data.tools : []
-  const connectors = Array.isArray(bff.data?.connectors) ? bff.data.connectors : []
 
   return (
     <div className="space-y-6">
@@ -74,51 +86,126 @@ export default function Tools() {
         </section>
       </div>
 
-      {/* Hive MCP server catalogue */}
+      {/* MCP catalogue with registration form */}
       <section className="panel overflow-hidden" data-testid="mcp-catalogue">
-        <div className="px-4 py-3 border-b border-[#232833]">
-          <span className="label">MCP servers · Hive catalogue</span>
+        <div className="px-4 py-3 border-b border-[#232833] flex items-center justify-between">
+          <span className="label">MCP servers · catalogue</span>
+          <button
+            className="btn btn-primary !py-1.5 !px-3 !text-xs"
+            data-testid="toggle-mcp-form"
+            onClick={() => setShowForm((v) => !v)}
+          >
+            {showForm ? 'Cancel' : '+ Register MCP server'}
+          </button>
         </div>
-        <McpList />
+        {showForm && (
+          <McpForm
+            onCreated={(srv) => {
+              setShowForm(false)
+              setExtra((x) => [...x, srv])
+            }}
+          />
+        )}
+        <McpList extra={extra} />
       </section>
     </div>
   )
 }
 
-function useSvcRelay() {
-  const [s, setS] = useState({ data: null, err: '' })
-  useEffect(() => {
-    svcGet('relay', '/health')
-      .then((d) => setS({ data: d, err: '' }))
-      .catch((e) => setS({ data: null, err: String(e.message || e) }))
-  }, [])
-  return s
+function McpForm({ onCreated }) {
+  const [form, setForm] = useState({
+    name: '', url: '', transport: 'sse', description: '',
+  })
+  const [msg, setMsg] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value })
+
+  const submit = async (e) => {
+    e.preventDefault()
+    setBusy(true)
+    try {
+      const r = await fetch('/api/bff/mcp', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      const body = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(body.error || `status ${r.status}`)
+      onCreated(body)
+      setMsg(null)
+    } catch (e2) {
+      setMsg({ ok: false, text: String(e2.message || e2) })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const input = 'w-full px-3 py-2 rounded-lg bg-[#0a0c10] border border-[#232833] text-[13px] text-slate-200 focus:outline-none focus:border-teal-500'
+
+  return (
+    <form onSubmit={submit} className="p-4 border-b border-[#232833] space-y-3 bg-[#0d1015]" data-testid="mcp-form">
+      <div className="grid md:grid-cols-2 gap-3">
+        <label className="block">
+          <span className="text-xs text-slate-500">Name</span>
+          <input className={input} value={form.name} onChange={set('name')} placeholder="github-mcp" required data-testid="mcp-name" />
+        </label>
+        <label className="block">
+          <span className="text-xs text-slate-500">Transport</span>
+          <select className={input} value={form.transport} onChange={set('transport')} data-testid="mcp-transport">
+            <option value="sse">sse</option>
+            <option value="streamable-http">streamable-http</option>
+            <option value="stdio">stdio</option>
+          </select>
+        </label>
+        <label className="block md:col-span-2">
+          <span className="text-xs text-slate-500">URL</span>
+          <input className={input} type="url" value={form.url} onChange={set('url')} placeholder="https://mcp.example.com/sse" required data-testid="mcp-url" />
+        </label>
+        <label className="block md:col-span-2">
+          <span className="text-xs text-slate-500">Description</span>
+          <input className={input} value={form.description} onChange={set('description')} placeholder="What does this server provide?" data-testid="mcp-description" />
+        </label>
+      </div>
+      <div className="flex items-center gap-3">
+        <button type="submit" disabled={busy} className="btn btn-primary" data-testid="mcp-submit">
+          {busy ? 'Registering…' : 'Register server'}
+        </button>
+        {msg && <span className={`text-xs ${msg.ok ? 'text-teal-300' : 'text-rose-400'}`}>{msg.text}</span>}
+      </div>
+    </form>
+  )
 }
 
-function McpList() {
+function McpList({ extra = [] }) {
   const [list, setList] = useState(null)
+
   useEffect(() => {
     fetch('/api/bff/mcp')
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((d) => setList(Array.isArray(d) ? d : d.servers ?? d.items ?? []))
       .catch(() => setList([]))
-  }, [])
-  if (!Array.isArray(list)) return <div className="p-4 text-sm text-slate-600">Loading…</div>
-  if (!list.length)
+  }, [extra.length])
+
+  const all = [...extra, ...(Array.isArray(list) ? list : [])]
+
+  if (!Array.isArray(list)) return <div className="p-4 text-sm text-slate-600">Loading catalogue…</div>
+  if (!all.length)
     return (
-      <div className="p-8 text-center text-[13px] text-slate-600">
-        No MCP servers registered. Register one against an agent from the Agents view.
+      <div className="p-8 text-center text-[13px] text-slate-600" data-testid="mcp-empty">
+        No MCP servers registered. Click “Register MCP server” to add the first one.
       </div>
     )
   return (
-    <table className="data">
-      <thead><tr><th>Name</th><th>Transport</th><th>URL</th></tr></thead>
+    <table className="data" data-testid="mcp-table">
+      <thead><tr><th>Name</th><th>Transport</th><th>URL</th><th>Description</th></tr></thead>
       <tbody>
-        {list.map((m) => (
-          <tr key={m.id}>
+        {all.map((m, i) => (
+          <tr key={m.id ?? i}>
             <td className="text-slate-200">{m.name}</td>
             <td><span className="badge badge-mono !text-[10px]">{m.transport}</span></td>
             <td className="text-slate-500 text-xs">{m.url}</td>
+            <td className="text-slate-500 text-xs">{m.description}</td>
           </tr>
         ))}
       </tbody>

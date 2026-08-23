@@ -82,6 +82,45 @@ fn svc_env(_state: &AppState, key: &str) -> Option<String> {
     std::env::var(key).ok().filter(|v| !v.is_empty())
 }
 
+/// Hive service-account JWT, obtained lazily and cached in-process until
+/// shortly before expiry. Env: HIVE_SERVICE_EMAIL / HIVE_SERVICE_PASSWORD.
+async fn hive_service_token(state: &AppState) -> Option<String> {
+
+    static CACHED: std::sync::OnceLock<tokio::sync::RwLock<Option<(String, u64)>>> =
+        std::sync::OnceLock::new();
+    let lock = CACHED.get_or_init(|| tokio::sync::RwLock::new(None));
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    {
+        let guard = lock.read().await;
+        if let Some((tok, exp)) = guard.as_ref() {
+            if *exp > now + 60 {
+                return Some(tok.clone());
+            }
+        }
+    }
+
+    let email = svc_env(state, "HIVE_SERVICE_EMAIL")?;
+    let password = svc_env(state, "HIVE_SERVICE_PASSWORD")?;
+    let resp = state
+        .client
+        .post(format!("{}/api/auth/login", hive_url()))
+        .json(&serde_json::json!({"email": email, "password": password}))
+        .send()
+        .await
+        .ok()?;
+    let body: Value = resp.json().await.ok()?;
+    let tok = body["access_token"].as_str()?.to_string();
+    // Hive tokens are 30-min JWTs; refresh at the 25-min mark.
+    let exp = now + 1200; // refresh well before Hive's 30-min expiry
+    let mut guard = lock.write().await;
+    *guard = Some((tok.clone(), exp));
+    Some(tok)
+}
+
 fn hive_url() -> String {
     std::env::var("HIVE_INTERNAL_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".into())
 }
@@ -203,21 +242,33 @@ pub async fn agents_create(
     // 1. Argus identity (owner = the console admin creating it).
     let argus = argus::create_agent_via_api(&state, &user.email, &body.name, &body.scopes).await;
 
-    // 2. Hive registration — requires a Hive user context; use the service
-    //    account created at bootstrap (or report partial success).
-    let hive = backend_post(
+    // 2. Hive registration with the service account (token auto-refreshed).
+    let tok = hive_service_token(&state).await;
+    let payload = json!({
+        "name": body.name,
+        "description": body.description,
+        "agent_type": "external",
+        "endpoint_url": body.endpoint_url.clone().unwrap_or_else(|| "http://127.0.0.1:9/pending".into()),
+        "skills": [],
+    });
+    let mut hive = backend_post(
         &state,
         format!("{}/api/agent/register", hive_url()),
-        Some(&svc_env(&state, "HIVE_SERVICE_TOKEN").unwrap_or_default()),
-        json!({
-            "name": body.name,
-            "description": body.description,
-            "agent_type": "external",
-            "endpoint_url": body.endpoint_url.clone().unwrap_or_else(|| "http://127.0.0.1:9/pending".into()),
-            "skills": [],
-        }),
+        tok.as_deref(),
+        payload.clone(),
     )
     .await;
+    if hive.is_err() {
+        // Token may have just expired — force a fresh login and retry once.
+        let tok2 = hive_service_token(&state).await;
+        hive = backend_post(
+            &state,
+            format!("{}/api/agent/register", hive_url()),
+            tok2.as_deref(),
+            payload,
+        )
+        .await;
+    }
 
     Json(json!({
         "argus": argus,
@@ -291,10 +342,11 @@ pub async fn mcp_create(
     if let Err(r) = require_admin(&state, &headers).await {
         return r;
     }
+    let tok = hive_service_token(&state).await;
     let result = backend_post(
         &state,
         format!("{}/api/mcp-servers", hive_url()),
-        Some(&svc_env(&state, "HIVE_SERVICE_TOKEN").unwrap_or_default()),
+        tok.as_deref(),
         serde_json::to_value(&body).unwrap_or(Value::Null),
     )
     .await;
@@ -308,10 +360,11 @@ pub async fn mcp_list(State(state): State<AppState>, headers: HeaderMap) -> Resp
     if let Err(r) = require_admin(&state, &headers).await {
         return r;
     }
+    let tok = hive_service_token(&state).await;
     let v = backend_get(
         &state,
         format!("{}/api/mcp-servers", hive_url()),
-        svc_env(&state, "HIVE_SERVICE_TOKEN").as_deref(),
+        tok.as_deref(),
     )
     .await;
     match v {
