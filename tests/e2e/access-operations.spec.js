@@ -13,3 +13,11 @@ test('Access operations approve requests and kill live sessions', async ({ page 
   await expect(page.getByText('Session killed.')).toBeVisible()
   await expect(page.getByTestId('no-sessions')).toBeVisible()
 })
+
+test('Access operators can inspect a live session', async ({ page }) => {
+  const response = await page.request.get('/api/bff/access/sessions/ses_e2e_001')
+  expect(response.status()).toBe(200)
+  const session = await response.json()
+  expect(session.spend_total).toBe(0.25)
+  expect(session.trust_level).toBe(0.95)
+})

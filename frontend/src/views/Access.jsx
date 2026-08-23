@@ -6,6 +6,7 @@ export default function Access() {
   const [approvals, setApprovals] = useState([])
   const [sessions, setSessions] = useState([])
   const [message, setMessage] = useState(null)
+  const [selectedSession, setSelectedSession] = useState(null)
   const [simulation, setSimulation] = useState({ action: 'call', resource: 'mcp/*', definition: '', result: null })
 
   useEffect(() => {
@@ -42,6 +43,12 @@ export default function Access() {
     const body = await response.json().catch(() => ({}))
     setMessage({ ok: response.ok, text: response.ok ? 'Session killed.' : body.error })
     if (response.ok) setSessions((current) => current.filter((item) => (item.id ?? item.session_id) !== sessionId))
+  }
+
+  const inspectSession = async (sessionId) => {
+    const response = await fetch(`/api/bff/access/sessions/${encodeURIComponent(sessionId)}`)
+    const body = await response.json().catch(() => ({}))
+    setSelectedSession(response.ok ? body : { error: body.error || `status ${response.status}` })
   }
 
   const revokeToken = async () => {
@@ -128,10 +135,22 @@ export default function Access() {
         {sessions.length ? sessions.map((session) => (
           <div key={session.id ?? session.session_id} className="px-4 py-2 border-t border-[#232833]/60 flex items-center gap-2">
             <span className="text-xs font-mono text-slate-400">{session.id ?? session.session_id}</span>
+            <button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`inspect-${session.id ?? session.session_id}`} onClick={() => inspectSession(session.id ?? session.session_id)}>Inspect</button>
             <button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`kill-${session.id ?? session.session_id}`} onClick={() => killSession(session.id ?? session.session_id)}>Kill</button>
           </div>
         )) : <div className="p-6 text-sm text-slate-600" data-testid="no-sessions">No live sessions.</div>}
       </section>
+
+      {selectedSession && (
+        <section className="panel p-5" data-testid="session-inspector">
+          <h2 className="font-semibold">Session inspector</h2>
+          {selectedSession.error ? (
+            <p className="text-sm text-rose-400">{selectedSession.error}</p>
+          ) : (
+            <pre className="mt-3 text-xs font-mono text-slate-300 whitespace-pre-wrap">{JSON.stringify(selectedSession, null, 2)}</pre>
+          )}
+        </section>
+      )}
 
       <section className="panel p-5" data-testid="token-revocation">
         <h2 className="font-semibold">Revoke token</h2>

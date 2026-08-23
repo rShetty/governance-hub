@@ -53,7 +53,7 @@ flow can be exercised end to end.
 - [ ] Policy create/read/edit/delete management.
 - [~] Approval queue approve/deny actions.
 - [x] Delegation issuance and grant revocation.
-- [ ] Session inspector with trajectory and constraints.
+- [~] Session inspector with trajectory and constraints.
 - [x] Session kill action.
 - [x] Token revocation action.
 - [~] Policy simulator using Patroclus check-access.

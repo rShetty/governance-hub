@@ -1226,6 +1226,41 @@ pub async fn grant_revoke(
     }
 }
 
+/// GET /api/bff/access/sessions/{id} — inspect one live Patroclus session.
+pub async fn session_detail(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(session_id): Path<String>,
+) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let token = svc_env(&state, "PATROCLUS_ADMIN_TOKEN");
+    let sessions = match backend_get(
+        &state,
+        format!("{}/v1/sessions", patroclus_url()),
+        token.as_deref(),
+    )
+    .await
+    {
+        Ok(value) => value,
+        Err(error) => return now_err(StatusCode::BAD_GATEWAY, &format!("patroclus: {error}")),
+    };
+    let session = sessions
+        .get("sessions")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .find(|session| {
+            session.get("session_id").and_then(Value::as_str) == Some(session_id.as_str())
+        });
+    match session {
+        Some(session) => Json(session).into_response(),
+        None => now_err(StatusCode::NOT_FOUND, "session not found"),
+    }
+}
+
 // ── Cost (Miser) ─────────────────────────────────────────────────────────────
 
 pub async fn cost_overview(State(state): State<AppState>, headers: HeaderMap) -> Response {

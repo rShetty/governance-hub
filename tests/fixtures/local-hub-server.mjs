@@ -62,9 +62,33 @@ const server = http.createServer(async (request, response) => {
     return send(response, 200, { sessions })
   }
 
+  if (path === '/api/bff/access/sessions/ses_e2e_001' && request.method === 'GET') {
+    return send(response, 200, {
+      session_id: 'ses_e2e_001',
+      agent_id: 'agt_e2e_001',
+      actions_count: 7,
+      spend_total: 0.25,
+      trust_level: 0.95,
+      killed: false,
+      trajectory_length: 7,
+    })
+  }
+
   if (path === '/api/bff/access/approvals/apr_e2e_001/resolve' && request.method === 'POST') {
     approvals.length = 0
     return send(response, 200, { decision: 'approved', operator: 'e2e@governance.test' })
+  }
+
+  if (path === '/api/bff/access/sessions/ses_e2e_001' && request.method === 'GET') {
+    return send(response, 200, {
+      session_id: 'ses_e2e_001',
+      agent_id: 'agt_e2e_001',
+      actions_count: 7,
+      spend_total: 0.25,
+      trust_level: 0.95,
+      killed: false,
+      trajectory_length: 7,
+    })
   }
 
   if (path === '/api/bff/access/sessions/ses_e2e_001/kill' && request.method === 'POST') {
