@@ -191,7 +191,7 @@ test('MCP: create a server, grant it to an agent', async ({ request, page }) => 
     headers: h,
     data: {
       name: `e2e-mcp-${runId}`,
-      url: 'https://mcp.example.test/sse',
+      url: 'https://example.com/sse',
       transport: 'sse',
       description: 'playwright-created MCP server',
     },

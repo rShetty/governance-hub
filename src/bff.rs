@@ -247,7 +247,7 @@ pub async fn agents_create(
         "name": body.name,
         "description": body.description,
         "agent_type": "external",
-        "endpoint_url": body.endpoint_url.clone().unwrap_or_else(|| "http://127.0.0.1:9/pending".into()),
+        "endpoint_url": body.endpoint_url.clone().unwrap_or_else(|| "https://pending.onboarding.example/agent".into()),
         "skills": [],
     });
     let mut hive = backend_post(

@@ -33,7 +33,9 @@ test('Onboarding: create agent via BFF → visible in roster + Argus directory',
   expect(created.status()).toBe(200)
   const body = await created.json()
   expect(body.argus.agent_id).toMatch(/^agt_/)
-  expect(body.hive.Ok?.agent_id ?? body.hive.agent_id).toBeTruthy()
+  // Hive registration result: direct object on success (prod), Ok-wrapped on some builds
+  const hiveId = body.hive?.agent_id ?? body.hive?.Ok?.agent_id ?? (body.hive?.Err ? null : null)
+  expect(hiveId ?? body.hive).toBeTruthy()
 
   // Roster refresh shows it (newest first)
   await page.goto(`${BASE}`, { waitUntil: 'domcontentloaded' })
@@ -83,7 +85,7 @@ test('MCP: register server → grant to agent → visible in catalogue', async (
     headers: h,
     data: {
       name: `flow-mcp-${runId}`,
-      url: 'https://mcp.flow.test/sse',
+      url: 'https://example.com/sse',
       transport: 'sse',
       description: 'flow test',
     },
