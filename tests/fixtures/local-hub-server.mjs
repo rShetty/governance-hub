@@ -140,7 +140,14 @@ const server = http.createServer(async (request, response) => {
       total: 2,
       items: [
         { source: 'relay', kind: 'connector', id: 'github', name: 'GitHub connector', status: true },
-        { source: 'hive', kind: 'mcp-server', id: 'server-e2e', name: 'Fixture MCP server', status: 'active' },
+        {
+          source: 'hive',
+          kind: 'mcp-server',
+          id: 'server-e2e',
+          name: 'Fixture MCP server',
+          status: 'active',
+          detail: { authorized_agents: [{ id: 'agt_e2e_001' }] },
+        },
       ],
     })
   }

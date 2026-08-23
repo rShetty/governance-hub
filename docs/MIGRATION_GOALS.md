@@ -69,7 +69,7 @@ flow can be exercised end to end.
 - [x] Health-check individual catalog entries.
 - [ ] Display OAuth status/scopes without exposing secrets.
 - [ ] Grant/revoke agent and human access.
-- [ ] Detect grants lacking an equivalent Patroculus policy.
+- [~] Detect grants lacking an equivalent Patroculus policy.
 - [x] Provide authorization preview.
 - [~] Guarded tool invocation console.
 - [~] Cover catalog lifecycle and invocation through local Playwright.

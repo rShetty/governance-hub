@@ -105,7 +105,7 @@ export default function Tools() {
         )}
         {catalog.data?.items?.length > 0 && (
           <table className="data" data-testid="catalog-table">
-            <thead><tr><th>Capability</th><th>Source</th><th>Kind</th><th>Status</th></tr></thead>
+            <thead><tr><th>Capability</th><th>Source</th><th>Kind</th><th>Status</th><th>Health</th><th>Authorized agents</th></tr></thead>
             <tbody>
               {catalog.data.items.map((item, index) => (
                 <tr key={`${item.source}-${item.kind}-${item.id}-${index}`} data-testid={`catalog-${item.source}-${item.kind}`}>
@@ -122,6 +122,13 @@ export default function Tools() {
                       Health
                     </button>
                   </td>
+                  {item.kind === 'mcp-server' ? (
+                    <td className="text-xs text-slate-400" data-testid={`catalog-agents-${item.id}`}>
+                      {(item.detail?.authorized_agents ?? []).map((agent) => agent.id ?? agent.agent_id ?? agent).join(', ') || 'none'}
+                    </td>
+                  ) : (
+                    <td>—</td>
+                  )}
                 </tr>
               ))}
             </tbody>

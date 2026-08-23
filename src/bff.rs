@@ -1183,7 +1183,8 @@ pub async fn unified_catalog(State(state): State<AppState>, headers: HeaderMap) 
     if let Err(response) = require_admin(&state, &headers).await {
         return response;
     }
-    let hive_token = hive_service_token(&state).await;
+    let hive_token_a = hive_service_token(&state).await;
+    let hive_token_b = hive_token_a.clone();
     let (relay_tools, relay_backends, relay_connectors, hive_skills, hive_mcp) = tokio::join!(
         backend_get(&state, format!("{}/v1/tools", relay_url()), None),
         backend_get(&state, format!("{}/mcp/backends", relay_url()), None),
@@ -1191,12 +1192,12 @@ pub async fn unified_catalog(State(state): State<AppState>, headers: HeaderMap) 
         backend_get(
             &state,
             format!("{}/api/skills", hive_url()),
-            hive_token.as_deref()
+            hive_token_a.as_deref()
         ),
         backend_get(
             &state,
             format!("{}/api/mcp-servers", hive_url()),
-            hive_token.as_deref()
+            hive_token_a.as_deref()
         ),
     );
 
@@ -1246,9 +1247,35 @@ pub async fn unified_catalog(State(state): State<AppState>, headers: HeaderMap) 
         hive_mcp.unwrap_or(Value::Null),
     );
 
+    for entry in catalog.iter_mut() {
+        if entry["source"] != "hive" || entry["kind"] != "mcp-server" {
+            continue;
+        }
+        let server_id = entry["id"].as_str().unwrap_or_default().to_string();
+        if server_id.is_empty() {
+            continue;
+        }
+        let token = hive_token_b.clone();
+        let access = backend_get(
+            &state,
+            format!("{}/api/mcp-servers/{}/agents", hive_url(), server_id),
+            token.as_deref(),
+        )
+        .await;
+        let agents = match access {
+            Ok(value) => value.get("agents").cloned().unwrap_or(value),
+            Err(error) => json!({ "__error": error }),
+        };
+        entry["detail"]["authorized_agents"] = agents;
+    }
+
     Json(json!({
         "items": catalog,
         "total": catalog.len(),
+        "grant_mapping_status": {
+            "policy_source": "pending",
+            "note": "Authorized agent lists are visible; Patroclus policy equivalence checks are being added.",
+        },
     }))
     .into_response()
 }
