@@ -10,7 +10,7 @@ pub mod status;
 use axum::{
     http::header,
     response::{Html, Response},
-    routing::{get, post},
+    routing::{get, patch, post},
     Json, Router,
 };
 pub use config::Config;
@@ -98,6 +98,11 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/bff/activity", get(bff::activity_feed))
         .route("/api/bff/cost", get(bff::cost_overview))
+        .route("/api/bff/cost/keys", post(bff::miser_key_create))
+        .route(
+            "/api/bff/cost/keys/{key_id}",
+            patch(bff::miser_key_update).post(bff::miser_key_revoke),
+        )
         .route("/api/bff/tools", get(bff::tools_overview))
         .route("/api/bff/proxy/{backend}/{*rest}", get(bff::passthrough))
         .layer(axum::middleware::from_fn_with_state(

@@ -678,6 +678,137 @@ pub async fn cost_overview(State(state): State<AppState>, headers: HeaderMap) ->
     }
 }
 
+#[derive(Deserialize, serde::Serialize)]
+pub struct MiserKeyRequest {
+    pub owner: String,
+    #[serde(default)]
+    pub allowed_tiers: Vec<String>,
+    pub rate_limit_rpm: Option<u32>,
+    pub monthly_budget_usd: Option<f64>,
+    pub expires_at: Option<u64>,
+}
+
+/// POST /api/bff/cost/keys — provision a Miser key. Returns metadata only.
+pub async fn miser_key_create(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<MiserKeyRequest>,
+) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let Some(token) = svc_env(&state, "MISER_ADMIN_KEY") else {
+        return now_err(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "MISER_ADMIN_KEY not configured",
+        );
+    };
+    match backend_post(
+        &state,
+        format!("{}/admin/keys", miser_url()),
+        Some(&token),
+        serde_json::to_value(&body).unwrap_or(Value::Null),
+    )
+    .await
+    {
+        Ok(mut result) => {
+            if let Some(object) = result.as_object_mut() {
+                object.remove("key");
+                object.insert(
+                    "secret_delivery".into(),
+                    json!("operator-only command output"),
+                );
+                object.insert("created_by".into(), json!(body.owner));
+            }
+            Json(result).into_response()
+        }
+        Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("miser: {error}")),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct MiserKeyUpdate {
+    #[serde(default)]
+    pub allowed_tiers: Vec<String>,
+    pub rate_limit_rpm: Option<u32>,
+    pub monthly_budget_usd: Option<f64>,
+}
+
+/// PATCH /api/bff/cost/keys/{id} — update quotas and tier allowlists.
+pub async fn miser_key_update(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(key_id): Path<String>,
+    Json(body): Json<MiserKeyUpdate>,
+) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let Some(token) = svc_env(&state, "MISER_ADMIN_KEY") else {
+        return now_err(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "MISER_ADMIN_KEY not configured",
+        );
+    };
+    let payload = json!({
+        "allowed_tiers": body.allowed_tiers,
+        "rate_limit_rpm": body.rate_limit_rpm,
+        "monthly_budget_usd": body.monthly_budget_usd,
+    });
+    match state
+        .client
+        .patch(format!("{}/admin/keys/{key_id}", miser_url()))
+        .json(&payload)
+        .bearer_auth(token)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+    {
+        Ok(response) => {
+            let status =
+                StatusCode::from_u16(response.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+            (status, Json(response.json().await.unwrap_or(Value::Null))).into_response()
+        }
+        Err(error) => now_err(
+            StatusCode::BAD_GATEWAY,
+            &format!("miser unreachable: {error}"),
+        ),
+    }
+}
+
+/// POST /api/bff/cost/keys/{id}/revoke — deactivate without deleting evidence.
+pub async fn miser_key_revoke(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(key_id): Path<String>,
+) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let Some(token) = svc_env(&state, "MISER_ADMIN_KEY") else {
+        return now_err(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "MISER_ADMIN_KEY not configured",
+        );
+    };
+    match state
+        .client
+        .patch(format!("{}/admin/keys/{key_id}", miser_url()))
+        .json(&json!({}))
+        .bearer_auth(token)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+    {
+        Ok(_) => Json(json!({ "id": key_id, "active": false, "revoked_by": "hub-admin" }))
+            .into_response(),
+        Err(error) => now_err(
+            StatusCode::BAD_GATEWAY,
+            &format!("miser unreachable: {error}"),
+        ),
+    }
+}
+
 // ── Tools / connectors (Relay) ───────────────────────────────────────────────
 
 pub async fn tools_overview(State(state): State<AppState>, headers: HeaderMap) -> Response {

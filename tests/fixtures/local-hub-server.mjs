@@ -10,6 +10,7 @@ const identities = [
 ]
 const approvals = [{ id: 'apr_e2e_001', agent_id: 'agt_e2e_001', action: 'deploy' }]
 const sessions = [{ id: 'ses_e2e_001', agent_id: 'agt_e2e_001', active: true }]
+const miserKeys = [{ id: 'key_e2e_001', owner: 'fixture-agent', allowed_tiers: [], active: true }]
 
 function send(response, status, body, type = 'application/json') {
   response.writeHead(status, { 'content-type': type })
@@ -82,6 +83,27 @@ const server = http.createServer(async (request, response) => {
         { source: 'aegis', kind: 'egress.block', summary: 'evil.example.test', ts: new Date().toISOString() },
       ],
     })
+  }
+
+  if (path === '/api/bff/cost') {
+    return send(response, 200, { configured: true, keys: miserKeys })
+  }
+
+  if (path === '/api/bff/cost/keys' && request.method === 'POST') {
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      const key = { id: `key_${crypto.randomUUID().slice(0, 8)}`, owner: body.owner, allowed_tiers: body.allowed_tiers ?? [], active: true }
+      miserKeys.push(key)
+      send(response, 200, { id: key.id, secret_delivery: 'operator-only command output', created_by: body.owner })
+    })
+    return
+  }
+
+  if (path === '/api/bff/cost/keys/key_e2e_001/revoke' && request.method === 'POST') {
+    miserKeys[0].active = false
+    return send(response, 200, { id: 'key_e2e_001', active: false })
   }
 
   if (path === '/api/svc/forge/api/packages' && request.method === 'POST') {

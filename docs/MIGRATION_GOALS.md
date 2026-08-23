@@ -91,8 +91,8 @@ flow can be exercised end to end.
 
 ## Phase 6 - Cost Administration
 
-- [ ] Miser key create/read/update/delete.
-- [ ] Key rotation with one-time secret display.
+- [~] Miser key create/read/update/delete.
+- [~] Key rotation with one-time secret display.
 - [ ] Tier allowlist controls.
 - [ ] RPM quota controls.
 - [ ] Monthly budget controls.
@@ -101,7 +101,7 @@ flow can be exercised end to end.
 - [ ] Audit integrity check display.
 - [ ] Spend/session attribution.
 - [ ] Budget enforcement preview.
-- [ ] Cover key lifecycle through local Playwright.
+- [~] Cover key lifecycle through local Playwright.
 
 ## Phase 7 - Unified Activity
 
