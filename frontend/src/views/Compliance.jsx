@@ -27,6 +27,16 @@ export default function Compliance() {
 
   const report = reports[framework]
 
+  const exportReport = () => {
+    const blob = new Blob([JSON.stringify({ framework, report, exported_at: new Date().toISOString() }, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${framework}-compliance-evidence.json`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -41,9 +51,12 @@ export default function Compliance() {
       {error && <div className="panel p-4 text-sm text-amber-300">Sentiel unavailable — {error}</div>}
       {loading && !report && <div className="panel p-6 text-sm text-slate-600">Loading report…</div>}
       {report && (
-        <section className="panel p-5" data-testid="compliance-report">
-          <pre className="text-xs font-mono text-slate-300 whitespace-pre-wrap">{JSON.stringify(report, null, 2)}</pre>
-        </section>
+        <>
+          <section className="panel p-5" data-testid="compliance-report">
+            <pre className="text-xs font-mono text-slate-300 whitespace-pre-wrap">{JSON.stringify(report, null, 2)}</pre>
+          </section>
+          <button className="btn btn-primary" data-testid="export-compliance" onClick={exportReport}>Export evidence</button>
+        </>
       )}
     </div>
   )

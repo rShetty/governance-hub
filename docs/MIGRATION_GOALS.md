@@ -127,7 +127,7 @@ flow can be exercised end to end.
 - [ ] Agent attestation/verification flows.
 - [ ] Containment workflow for failed attestations.
 - [ ] Remediation ownership/status.
-- [ ] Report/evidence export.
+- [~] Report/evidence export.
 - [ ] Cover risk workflows through local Playwright.
 
 ## Phase 9 - Backend UI Retirement
