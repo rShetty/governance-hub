@@ -223,17 +223,21 @@ export default function Access() {
           <span className="num text-[11px] text-slate-600">{list.length}</span>
         </div>
         <table className="data">
-          <thead><tr><th>Name</th><th>Engine</th><th>Status</th></tr></thead>
+          <thead><tr><th>Name</th><th>Engine</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>
             {list.map((p) => (
-              <tr key={p.id ?? p.name}>
+              <tr key={p.id ?? p.name} data-testid={`policy-${p.id ?? p.name}`}>
                 <td className="text-slate-200">{p.name}</td>
                 <td><span className="badge badge-mono !text-[10px]">{p.engine}</span></td>
                 <td><span className="badge badge-ok">{p.status ?? 'active'}</span></td>
+                <td><button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`inspect-policy-${p.id ?? p.name}`} onClick={() => {
+                  const policy = list.find((item) => String(item.id) === String(p.id ?? p.name))
+                  setMessage({ ok: !!policy, text: policy ? `Policy ${policy.name}: ${String(policy.definition ?? '').slice(0, 240)}` : 'Policy definition unavailable.' })
+                }}>Inspect</button></td>
               </tr>
             ))}
             {!list.length && !err && (
-              <tr><td colSpan="3" className="text-center py-8 text-slate-600">No policies defined</td></tr>
+              <tr><td colSpan="4" className="text-center py-8 text-slate-600">No policies defined</td></tr>
             )}
           </tbody>
         </table>

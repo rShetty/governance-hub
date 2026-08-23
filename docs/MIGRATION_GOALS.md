@@ -50,7 +50,7 @@ flow can be exercised end to end.
 ## Phase 3 - Access Operations
 
 - [~] Resource list/create/detail management.
-- [ ] Policy create/read/edit/delete management.
+- [~] Policy create/read/edit/delete management.
 - [~] Approval queue approve/deny actions.
 - [x] Delegation issuance and grant revocation.
 - [~] Session inspector with trajectory and constraints.

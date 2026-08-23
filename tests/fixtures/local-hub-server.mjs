@@ -257,6 +257,12 @@ const server = http.createServer(async (request, response) => {
     return send(response, 200, [{ id: 'res_e2e_001', name: 'Fixture API' }])
   }
 
+  if (path === '/api/bff/policies') {
+    return send(response, 200, {
+      policies: [{ id: 'pol_e2e_001', name: 'allow-github', engine: 'yaml', status: 'active', definition: '- name: allow-github\n  decision: allow' }],
+    })
+  }
+
   if (path === '/api/bff/access/resources' && request.method === 'POST') {
     let raw = ''
     request.on('data', chunk => { raw += chunk })
