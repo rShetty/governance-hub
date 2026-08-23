@@ -70,8 +70,8 @@ flow can be exercised end to end.
 - [ ] Display OAuth status/scopes without exposing secrets.
 - [ ] Grant/revoke agent and human access.
 - [ ] Detect grants lacking an equivalent Patroculus policy.
-- [ ] Provide authorization preview.
-- [ ] Guarded tool invocation console.
+- [x] Provide authorization preview.
+- [~] Guarded tool invocation console.
 - [~] Cover catalog lifecycle and invocation through local Playwright.
 
 ## Phase 5 - Supply Chain Trust

@@ -50,6 +50,33 @@ export default function Tools() {
   const bff = useBff()
   const catalog = useUnifiedCatalog()
   const [healthMessage, setHealthMessage] = useState(null)
+  const [invocation, setInvocation] = useState({ action: 'call', resource: 'mcp/github', definition: '', preview: null, result: null })
+
+  const runAuthorizationPreview = async () => {
+    const response = await fetch('/api/bff/access/simulate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: invocation.action,
+        resource: invocation.resource,
+        requested_scopes: [],
+        definition: invocation.definition,
+      }),
+    })
+    const body = await response.json().catch(() => ({}))
+    setInvocation((current) => ({ ...current, preview: body }))
+    return response.ok && body.decision === 'allow'
+  }
+
+  const invokeTool = async (event) => {
+    event.preventDefault()
+    setInvocation((current) => ({ ...current, result: null }))
+    if (!await runAuthorizationPreview()) {
+      setInvocation((current) => ({ ...current, result: { blocked: true } }))
+      return
+    }
+    setInvocation((current) => ({ ...current, result: { accepted: true, action: current.action, resource: current.resource } }))
+  }
   const [showForm, setShowForm] = useState(false)
   const [extra, setExtra] = useState([])
 
@@ -102,6 +129,21 @@ export default function Tools() {
         )}
       </section>
       {healthMessage && <div className={healthMessage.ok ? 'text-sm text-teal-300' : 'text-sm text-rose-400'} data-testid="catalog-health-result">{healthMessage.text}</div>}
+
+      <form className="panel p-5 space-y-3" data-testid="tool-invocation-console" onSubmit={invokeTool}>
+        <h2 className="font-semibold">Guarded tool invocation</h2>
+        <p className="text-xs text-slate-500">The Hub blocks dispatch unless the advisory preview returns allow.</p>
+        <input data-testid="invoke-action" value={invocation.action} onChange={(event) => setInvocation({ ...invocation, action: event.target.value })} />
+        <input data-testid="invoke-resource" value={invocation.resource} onChange={(event) => setInvocation({ ...invocation, resource: event.target.value })} />
+        <textarea data-testid="invoke-policy" rows="4" placeholder="YAML policy rules" value={invocation.definition} onChange={(event) => setInvocation({ ...invocation, definition: event.target.value })} />
+        <button className="btn btn-primary" data-testid="invoke-run">Preview and invoke</button>
+        {invocation.preview && <pre className="text-xs text-slate-300" data-testid="invoke-preview">{JSON.stringify(invocation.preview, null, 2)}</pre>}
+        {invocation.result && (
+          <div className="text-sm" data-testid="invoke-result">
+            {invocation.result.blocked ? <span className="text-rose-400">Blocked by policy preview.</span> : <span className="text-teal-300">Authorized invocation accepted.</span>}
+          </div>
+        )}
+      </form>
 
       <div className="grid xl:grid-cols-2 gap-6">
         <section className="panel overflow-hidden">
