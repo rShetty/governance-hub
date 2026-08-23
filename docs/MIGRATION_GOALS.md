@@ -78,9 +78,9 @@ flow can be exercised end to end.
 
 ## Phase 5 - Supply Chain Trust
 
-- [~] Package detail view.
-- [ ] Sign package flow.
-- [ ] Verify signature flow.
+- [x] Package detail view.
+- [x] Sign package flow.
+- [x] Verify signature flow.
 - [~] Generate SBOM flow.
 - [~] Vulnerability scan flow.
 - [~] Provenance submission and verification.
@@ -88,7 +88,7 @@ flow can be exercised end to end.
 - [~] Release readiness decision.
 - [x] Associate packages with agents.
 - [~] Enforce unsigned/critical-vulnerability deployment block.
-- [ ] Publisher/key management improvements.
+- [~] Publisher/key management improvements.
 - [ ] Cover full supply-chain decision path through local Playwright.
 
 ## Phase 6 - Cost Administration

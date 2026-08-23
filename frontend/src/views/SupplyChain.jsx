@@ -23,6 +23,8 @@ export default function SupplyChain() {
   const [selected, setSelected] = useState(null)
   const [detail, setDetail] = useState(null)
   const [associations, setAssociations] = useState([])
+  const [signingKey, setSigningKey] = useState(null)
+  const [verification, setVerification] = useState(null)
 
   const openDetail = async (item) => {
     setSelected(item.id)
@@ -49,6 +51,21 @@ export default function SupplyChain() {
         })
       } else if (action === 'scan') {
         response = await fetch(`/api/svc/forge/api/packages/${selected}/scan`, { method: 'POST' })
+      } else if (action === 'verify') {
+        response = await fetch(`/api/svc/forge/api/packages/${selected}/verify`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ public_key: signingKey?.public_key ?? '' }),
+        })
+        const body = await response.json().catch(() => ({}))
+        setVerification(body)
+      } else if (action === 'sign') {
+        if (!signingKey?.private_key) throw new Error('Generate a signing key first')
+        response = await fetch(`/api/svc/forge/api/packages/${selected}/sign`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ private_key: signingKey.private_key }),
+        })
       } else if (action === 'provenance') {
         response = await fetch(`/api/svc/forge/api/packages/${selected}/provenance`, {
           method: 'POST',
@@ -94,6 +111,17 @@ export default function SupplyChain() {
       setAssociations(await response.json())
     } catch (cause) {
       setAssociations([])
+      setMessage({ ok: false, text: String(cause.message || cause) })
+    }
+  }
+
+  const generateKey = async () => {
+    try {
+      const response = await fetch('/api/svc/forge/api/keys/generate', { method: 'POST' })
+      if (!response.ok) throw new Error(`status ${response.status}`)
+      setSigningKey(await response.json())
+      setMessage({ ok: true, text: 'Signing key generated. Keep the private key secure.' })
+    } catch (cause) {
       setMessage({ ok: false, text: String(cause.message || cause) })
     }
   }
@@ -213,6 +241,25 @@ export default function SupplyChain() {
             <input name="agent_id" required placeholder="Hive agent ID" />
             <button className="btn btn-primary">Associate</button>
           </form>
+
+          <div className="flex gap-2 flex-wrap items-center">
+            <button type="button" className="btn btn-primary" data-testid="generate-key" onClick={generateKey}>Generate key</button>
+            <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => runPackageAction('sign')}>Sign package</button>
+            <button type="button" className="btn btn-ghost" disabled={busy || !signingKey} onClick={() => runPackageAction('verify')}>Verify signature</button>
+          </div>
+
+          {signingKey && (
+            <div className="inset p-3 text-xs" data-testid="signing-key-state">
+              <div>Public key ready.</div>
+              <div className="text-slate-500">Private key retained only in this browser session for signing.</div>
+            </div>
+          )}
+          {verification && (
+            <div className="inset p-3 text-sm" data-testid="signature-result">
+              Signature valid: <span className={verification.signature_valid ? 'text-emerald-400' : 'text-rose-400'}>{String(!!verification.signature_valid)}</span>
+            </div>
+          )
+          }
           <div data-testid="package-agents">
             <span className="label">Associated agents</span>
             {associations.length ? associations.map((association) => (

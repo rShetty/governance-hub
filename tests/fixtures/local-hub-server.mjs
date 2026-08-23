@@ -482,17 +482,38 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
+  if (path === '/api/svc/forge/api/keys/generate' && request.method === 'POST') {
+    return send(response, 200, { public_key: 'fixture-public-key', private_key: 'fixture-private-key' })
+  }
+
+  if (path.match(/^\/api\/svc\/forge\/api\/packages\/[^/]+\/sign$/) && request.method === 'POST') {
+    packages.forEach(pkg => { pkg.signature = 'fixture-signature'; pkg.signed = true })
+    return send(response, 200, { signed: true })
+  }
+
+  if (path.match(/^\/api\/svc\/forge\/api\/packages\/[^/]+\/verify$/) && request.method === 'POST') {
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      send(response, 200, { signature_valid: body.public_key === 'fixture-public-key' })
+    })
+    return
+  }
+
   if (path.match(/^\/api\/svc\/forge\/api\/packages\/([^/]+)\/trust$/) && request.method === 'GET') {
+    const packageId = path.split('/').at(-2)
+    const pkg = packages.find(item => item.id === packageId) ?? packages.at(-1)
     return send(response, 200, {
-      trust_score: packages.at(-1)?.name?.includes('blocked') ? 0.2 : 0.95,
-      meets_threshold: !packages.at(-1)?.name?.includes('blocked'),
-      has_critical: packages.at(-1)?.name?.includes('blocked'),
+      trust_score: pkg?.signature ? (pkg.name.includes('blocked') ? 0.2 : 0.95) : 0.2,
+      meets_threshold: !!pkg?.signature && !pkg.name.includes('blocked'),
+      has_critical: !pkg?.signature && pkg?.name?.includes('blocked'),
       factors: {
-        signed: !packages.at(-1)?.name?.includes('blocked'),
+        signed: !!pkg?.signature,
         publisher_trusted: true,
         sbom_present: true,
         provenance_verified: true,
-        has_critical: packages.at(-1)?.name?.includes('blocked'),
+        has_critical: !pkg?.signature && pkg?.name?.includes('blocked'),
       },
     })
   }
