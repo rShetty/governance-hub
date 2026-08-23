@@ -22,6 +22,7 @@ export default function SupplyChain() {
   const [publisherForm, setPublisherForm] = useState(BLANK_PUBLISHER)
   const [selected, setSelected] = useState(null)
   const [detail, setDetail] = useState(null)
+  const [associations, setAssociations] = useState([])
 
   const openDetail = async (item) => {
     setSelected(item.id)
@@ -71,6 +72,33 @@ export default function SupplyChain() {
       setBusy(false)
     }
   }
+
+  const associateAgent = async (event) => {
+    event.preventDefault()
+    if (!selected) return
+    const agentId = event.currentTarget.elements.agent_id.value
+    const response = await fetch(`/api/svc/forge/api/packages/${selected}/agents`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ agent_id: agentId, operator: 'governance-hub-operator' }),
+    })
+    const body = await response.json().catch(() => ({}))
+    setMessage({ ok: response.ok, text: response.ok ? `Associated with ${agentId}.` : body.error || `status ${response.status}` })
+  }
+
+  const loadAssociations = async () => {
+    if (!selected) return
+    try {
+      const response = await fetch(`/api/svc/forge/api/packages/${selected}/agents`)
+      if (!response.ok) throw new Error(`status ${response.status}`)
+      setAssociations(await response.json())
+    } catch (cause) {
+      setAssociations([])
+      setMessage({ ok: false, text: String(cause.message || cause) })
+    }
+  }
+
+  useEffect(() => { loadAssociations() }, [selected, message])
 
   const load = () => {
     Promise.all([
@@ -181,6 +209,16 @@ export default function SupplyChain() {
               <pre data-testid="trust-json" className="text-xs font-mono whitespace-pre-wrap">{JSON.stringify(detail.factors ?? detail, null, 2)}</pre>
             </>
           )}
+          <form onSubmit={associateAgent} className="flex gap-2">
+            <input name="agent_id" required placeholder="Hive agent ID" />
+            <button className="btn btn-primary">Associate</button>
+          </form>
+          <div data-testid="package-agents">
+            <span className="label">Associated agents</span>
+            {associations.length ? associations.map((association) => (
+              <div key={association.agent_id} className="text-sm text-slate-300">{association.agent_id}</div>
+            )) : <div className="text-sm text-slate-600">None.</div>}
+          </div>
         </section>
       )}
 

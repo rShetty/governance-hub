@@ -336,6 +336,20 @@ const server = http.createServer(async (request, response) => {
     return send(response, 200, { vulnerabilities: {}, has_critical: false })
   }
 
+  if (path.match(/^\/api\/svc\/forge\/api\/packages\/[^/]+\/agents$/) && request.method === 'GET') {
+    return send(response, 200, [{ agent_id: 'agent_e2e_001', associated_by: 'governance-hub-operator' }])
+  }
+
+  if (path.match(/^\/api\/svc\/forge\/api\/packages\/[^/]+\/agents$/) && request.method === 'POST') {
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      send(response, 200, { associated: true, agent_id: body.agent_id })
+    })
+    return
+  }
+
   if (path === '/api/svc/forge/api/publishers' && request.method === 'GET') {
     return send(response, 200, publishers)
   }
