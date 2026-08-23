@@ -72,6 +72,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/bff/fleet", get(bff::fleet_overview))
         .route("/api/bff/agents", post(bff::agents_create))
         .route("/api/bff/mcp", get(bff::mcp_list).post(bff::mcp_create))
+        .route("/api/bff/mcp/{server_id}/grant", post(bff::mcp_grant))
+        .route("/api/bff/mcp/{server_id}/revoke", post(bff::mcp_revoke))
+        .route("/api/bff/mcp/{server_id}/access", get(bff::mcp_access))
+        .route("/api/bff/mcp/{server_id}/connect", post(bff::mcp_connect))
         .route(
             "/api/bff/policies",
             get(bff::policy_list).post(bff::policy_create),

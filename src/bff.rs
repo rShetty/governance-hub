@@ -85,9 +85,7 @@ fn svc_env(_state: &AppState, key: &str) -> Option<String> {
 /// Hive service-account JWT, obtained lazily and cached in-process until
 /// shortly before expiry. Env: HIVE_SERVICE_EMAIL / HIVE_SERVICE_PASSWORD.
 async fn hive_service_token(state: &AppState) -> Option<String> {
-    static CACHED: std::sync::OnceLock<tokio::sync::RwLock<Option<(String, u64)>>> =
-        std::sync::OnceLock::new();
-    let lock = CACHED.get_or_init(|| tokio::sync::RwLock::new(None));
+    let lock = TOKEN_CACHE.get_or_init(|| tokio::sync::RwLock::new(None));
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
@@ -119,6 +117,9 @@ async fn hive_service_token(state: &AppState) -> Option<String> {
     *guard = Some((tok.clone(), exp));
     Some(tok)
 }
+
+static TOKEN_CACHE: std::sync::OnceLock<tokio::sync::RwLock<Option<(String, u64)>>> =
+    std::sync::OnceLock::new();
 
 fn hive_url() -> String {
     std::env::var("HIVE_INTERNAL_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".into())
@@ -366,6 +367,22 @@ pub async fn mcp_list(State(state): State<AppState>, headers: HeaderMap) -> Resp
         tok.as_deref(),
     )
     .await;
+    let v = match v {
+        Err(_) => {
+            // cached token may have expired — one fresh-login retry
+            if let Some(lock) = TOKEN_CACHE.get() {
+                lock.write().await.take();
+            }
+            let tok2 = hive_service_token(&state).await;
+            backend_get(
+                &state,
+                format!("{}/api/mcp-servers", hive_url()),
+                tok2.as_deref(),
+            )
+            .await
+        }
+        ok => ok,
+    };
     match v {
         Ok(x) => Json(x).into_response(),
         Err(e) => now_err(StatusCode::BAD_GATEWAY, &format!("hive: {e}")),
@@ -555,5 +572,129 @@ pub async fn passthrough(
     match backend_get(&state, format!("{base}/{rest}"), token.as_deref()).await {
         Ok(v) => Json(v).into_response(),
         Err(e) => now_err(StatusCode::BAD_GATEWAY, &format!("{backend}: {e}")),
+    }
+}
+
+// ── MCP install lifecycle: connect / grant / revoke / access list ───────────
+
+#[derive(Deserialize)]
+pub struct GrantRequest {
+    pub agent_ids: Vec<String>,
+}
+
+/// POST /api/bff/mcp/{server_id}/grant — give agents access to a server.
+pub async fn mcp_grant(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(server_id): Path<String>,
+    Json(body): Json<GrantRequest>,
+) -> Response {
+    if let Err(r) = require_admin(&state, &headers).await {
+        return r;
+    }
+    let tok = hive_service_token(&state).await;
+    match backend_post(
+        &state,
+        format!("{}/api/mcp-servers/{}/grant", hive_url(), server_id),
+        tok.as_deref(),
+        json!({ "agent_ids": body.agent_ids }),
+    )
+    .await
+    {
+        Ok(v) => Json(v).into_response(),
+        Err(e) => now_err(StatusCode::BAD_GATEWAY, &format!("grant failed: {e}")),
+    }
+}
+
+/// POST /api/bff/mcp/{server_id}/revoke — remove agent access.
+pub async fn mcp_revoke(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(server_id): Path<String>,
+    Json(body): Json<GrantRequest>,
+) -> Response {
+    if let Err(r) = require_admin(&state, &headers).await {
+        return r;
+    }
+    let tok = hive_service_token(&state).await;
+    match backend_post(
+        &state,
+        format!("{}/api/mcp-servers/{}/revoke", hive_url(), server_id),
+        tok.as_deref(),
+        json!({ "agent_ids": body.agent_ids }),
+    )
+    .await
+    {
+        Ok(v) => Json(v).into_response(),
+        Err(e) => now_err(StatusCode::BAD_GATEWAY, &format!("revoke failed: {e}")),
+    }
+}
+
+/// GET /api/bff/mcp/{server_id}/access — which agents have access.
+pub async fn mcp_access(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(server_id): Path<String>,
+) -> Response {
+    if let Err(r) = require_admin(&state, &headers).await {
+        return r;
+    }
+    let tok = hive_service_token(&state).await;
+    match backend_get(
+        &state,
+        format!("{}/api/mcp-servers/{}/agents", hive_url(), server_id),
+        tok.as_deref(),
+    )
+    .await
+    {
+        Ok(v) => Json(v).into_response(),
+        Err(e) => now_err(StatusCode::BAD_GATEWAY, &format!("access list failed: {e}")),
+    }
+}
+
+/// POST /api/bff/mcp/{server_id}/connect — begin OAuth connect for OAuth-type
+/// servers; returns the authorization URL for the browser to open.
+pub async fn mcp_connect(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(server_id): Path<String>,
+) -> Response {
+    let user = match require_admin(&state, &headers).await {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
+    // OAuth connect is user-scoped in Hive; needs the caller's own Hive JWT.
+    // The hub exchanges its service token only for admin-level ops, so this
+    // proxies with the service account (owner of platform servers).
+    let tok = hive_service_token(&state).await;
+    let url = format!("{}/api/mcp/servers/{}/connect", hive_url(), server_id);
+    let mut req = state
+        .client
+        .get(&url)
+        .timeout(std::time::Duration::from_secs(15));
+    if let Some(t) = tok {
+        req = req.bearer_auth(&t);
+    }
+    match req.send().await {
+        Ok(resp) => {
+            let status = resp.status();
+            let body: Value = resp.json().await.unwrap_or(Value::Null);
+            if !status.is_success() {
+                return now_err(
+                    StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY),
+                    "connect flow could not start",
+                );
+            }
+            let auth_url = body["authorization_url"]
+                .as_str()
+                .or_else(|| body["url"].as_str());
+            Json(json!({
+                "server_id": server_id,
+                "authorization_url": auth_url,
+                "started_by": user.email,
+            }))
+            .into_response()
+        }
+        Err(e) => now_err(StatusCode::BAD_GATEWAY, &format!("connect failed: {e}")),
     }
 }

@@ -58,13 +58,18 @@ test('MCP: register server → grant to agent → visible in catalogue', async (
 
   // Hive session via service account is handled server-side by the proxy;
   // we need a user token for ownership. Use the service account directly.
-  const loginResp = await api.post(`${BASE}/api/svc/hive/api/auth/login`, {
-    data: {
-      email: process.env.HIVE_SVC_EMAIL || 'svc-console@local.dev',
-      password: process.env.HIVE_SVC_PASSWORD || 'ConsoleSvc2026!',
-    },
-  })
-  const token = (await loginResp.json())?.access_token
+  globalThis.__hiveToken = globalThis.__hiveToken || {}
+  const cacheKey = process.env.HIVE_SVC_EMAIL || 'svc-console@local.dev'
+  if (!globalThis.__hiveToken[cacheKey]) {
+    const loginResp = await api.post(`${BASE}/api/svc/hive/api/auth/login`, {
+      data: {
+        email: cacheKey,
+        password: process.env.HIVE_SVC_PASSWORD || 'ConsoleSvc2026!',
+      },
+    })
+    globalThis.__hiveToken[cacheKey] = (await loginResp.json())?.access_token
+  }
+  const token = globalThis.__hiveToken[cacheKey]
   const h = token ? { Authorization: `Bearer ${token}` } : {}
 
   // Create agent + MCP server + grant, all through console proxy.

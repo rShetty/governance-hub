@@ -179,6 +179,9 @@ function McpForm({ onCreated }) {
 
 function McpList({ extra = [] }) {
   const [list, setList] = useState(null)
+  const [accessFor, setAccessFor] = useState(null) // server_id being inspected
+  const [access, setAccess] = useState([])
+  const [busy, setBusy] = useState('')
 
   useEffect(() => {
     fetch('/api/bff/mcp')
@@ -189,6 +192,60 @@ function McpList({ extra = [] }) {
 
   const all = [...extra, ...(Array.isArray(list) ? list : [])]
 
+  const grantToAgent = async (serverId) => {
+    const agentId = prompt('Agent ID to grant access:')
+    if (!agentId) return
+    setBusy(serverId + ':grant')
+    try {
+      const r = await fetch(`/api/bff/mcp/${serverId}/grant`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ agent_ids: [agentId] }),
+      })
+      const body = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(body.error || `status ${r.status}`)
+      setBusy('')
+      alert('Access granted.')
+    } catch (e) {
+      setBusy('')
+      alert('Grant failed: ' + String(e.message || e))
+    }
+  }
+
+  const revokeFromAgent = async (serverId) => {
+    const agentId = prompt('Agent ID to revoke access from:')
+    if (!agentId) return
+    setBusy(serverId + ':revoke')
+    try {
+      const r = await fetch(`/api/bff/mcp/${serverId}/revoke`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ agent_ids: [agentId] }),
+      })
+      const body = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(body.error || `status ${r.status}`)
+      setBusy('')
+      alert('Access revoked.')
+    } catch (e) {
+      setBusy('')
+      alert('Revoke failed: ' + String(e.message || e))
+    }
+  }
+
+  const showAccess = async (serverId) => {
+    setBusy(serverId + ':access')
+    setAccessFor(serverId)
+    try {
+      const r = await fetch(`/api/bff/mcp/${serverId}/access`)
+      const d = await r.json()
+      setAccess(Array.isArray(d) ? d : d.agents ?? d.access ?? [])
+    } catch {
+      setAccess([])
+    } finally {
+      setBusy('')
+    }
+  }
+
   if (!Array.isArray(list)) return <div className="p-4 text-sm text-slate-600">Loading catalogue…</div>
   if (!all.length)
     return (
@@ -196,19 +253,49 @@ function McpList({ extra = [] }) {
         No MCP servers registered. Click “Register MCP server” to add the first one.
       </div>
     )
+
   return (
-    <table className="data" data-testid="mcp-table">
-      <thead><tr><th>Name</th><th>Transport</th><th>URL</th><th>Description</th></tr></thead>
-      <tbody>
-        {all.map((m, i) => (
-          <tr key={m.id ?? i}>
-            <td className="text-slate-200">{m.name}</td>
-            <td><span className="badge badge-mono !text-[10px]">{m.transport}</span></td>
-            <td className="text-slate-500 text-xs">{m.url}</td>
-            <td className="text-slate-500 text-xs">{m.description}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div>
+      <table className="data" data-testid="mcp-table">
+        <thead><tr><th>Name</th><th>Transport</th><th>URL</th><th>Install</th></tr></thead>
+        <tbody>
+          {all.map((m, i) => (
+            <tr key={m.id ?? i}>
+              <td className="text-slate-200">
+                {m.name}
+                {m.description && <div className="text-[10px] text-slate-600">{String(m.description).slice(0, 60)}</div>}
+              </td>
+              <td><span className="badge badge-mono !text-[10px]">{m.transport}</span></td>
+              <td className="text-slate-500 text-xs max-w-[220px] truncate">{m.url}</td>
+              <td>
+                <div className="flex gap-1.5">
+                  <button className="btn btn-ghost !py-1 !px-2 !text-[11px]"
+                    disabled={busy === m.id + ':grant'}
+                    onClick={() => grantToAgent(m.id)}
+                    title="Give an agent access to this server">Grant → agent</button>
+                  <button className="btn btn-ghost !py-1 !px-2 !text-[11px]"
+                    disabled={busy === m.id + ':revoke'}
+                    onClick={() => revokeFromAgent(m.id)}
+                    title="Remove agent access">Revoke</button>
+                  <button className="btn btn-ghost !py-1 !px-2 !text-[11px]"
+                    disabled={busy === m.id + ':access'}
+                    onClick={() => showAccess(m.id)}
+                    title="List agents with access">Who has it?</button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {accessFor && (
+        <div className="p-4 border-t border-[#232833]" data-testid="access-list">
+          <span className="label">Agents with access to {accessFor.slice(0, 13)}…</span>
+          <pre className="mt-2 p-3 rounded-lg bg-[#0a0c10] border border-[#232833] text-[11px] text-slate-400 overflow-x-auto">
+            {JSON.stringify(access, null, 1).slice(0, 800)}
+          </pre>
+        </div>
+      )}
+      {busy && <div className="p-2 text-[11px] text-slate-500 num">working: {busy}…</div>}
+    </div>
   )
 }

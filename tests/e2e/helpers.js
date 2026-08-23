@@ -2,8 +2,16 @@
 export async function login(page) {
   const base = new URL(process.env.E2E_BASE_URL || 'https://governance.rajeev.me')
   for (let attempt = 0; attempt < 2; attempt++) {
+    await page.goto(base.origin + '/api/me').catch(() => {})
+    // A 200 here means we already have a valid hub session.
+    const meResp = await page.request.get(`${base.origin}/api/me`)
+    if (meResp.ok()) return
     await page.goto(base.origin, { waitUntil: 'domcontentloaded' })
-    if (!page.url().includes('/login')) return // already authenticated
+    if (!page.url().includes('/login')) {
+      // still no session — force the dance by clearing cookies
+      await page.context().clearCookies()
+      await page.goto(base.origin, { waitUntil: 'domcontentloaded' })
+    }
     const email = process.env.E2E_EMAIL || 'rajeev@rajeev.me'
     const password = process.env.E2E_PASSWORD || ''
     await page.fill('input[name="email"]', email)

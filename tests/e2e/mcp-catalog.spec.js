@@ -62,14 +62,15 @@ test('MCP catalog: form validation blocks empty submission', async ({ page }) =>
 test('MCP catalog: association with agent works end-to-end', async ({ page }) => {
   const api = page.request
   // Login to hive as the service account through console proxy
-  const loginResp = await api.post(`${BASE}/api/svc/hive/api/auth/login`, {
-    data: {
-      email: process.env.HIVE_SVC_EMAIL || 'svc-console@local.dev',
-      password: process.env.HIVE_SVC_PASSWORD || 'ConsoleSvc2026!',
-    },
-  })
-  console.log('DEBUG hive login:', loginResp.status())
-  const token = (await loginResp.json())?.access_token
+  globalThis.__hiveToken = globalThis.__hiveToken || {}
+  const cacheKey = process.env.HIVE_SVC_EMAIL || 'svc-console@local.dev'
+  if (!globalThis.__hiveToken[cacheKey]) {
+    const loginResp = await api.post(`${BASE}/api/svc/hive/api/auth/login`, {
+      data: { email: cacheKey, password: process.env.HIVE_SVC_PASSWORD || 'ConsoleSvc2026!' },
+    })
+    globalThis.__hiveToken[cacheKey] = (await loginResp.json())?.access_token
+  }
+  const token = globalThis.__hiveToken[cacheKey]
   console.log('DEBUG token len:', (token || '').length)
   const h = token ? { Authorization: `Bearer ${token}` } : {}
 
