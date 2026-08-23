@@ -5,6 +5,7 @@ function useFleet() {
   const [services, setServices] = useState(null)
   const [err, setErr] = useState('')
   const [kpi, setKpi] = useState({ agents: null, spend: null, alerts: null })
+  const [signals, setSignals] = useState([])
   useEffect(() => {
     fetchServices().then(setServices).catch((e) => setErr(String(e.message || e)))
     // KPI band: agent identities from Argus dir, spend from Miser, alerts from Sentiel
@@ -19,10 +20,14 @@ function useFleet() {
       const alerts = Array.isArray(evs) ? evs.length : null
       setKpi((k) => ({ ...k, alerts: alerts ?? '—' }))
     }).catch(() => {})
+    fetch('/api/bff/activity?limit=20')
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error('activity unavailable'))))
+      .then((data) => setSignals(data.items ?? []))
+      .catch(() => setSignals([]))
     const t = setInterval(() => fetchServices().then(setServices).catch(() => {}), 15000)
     return () => clearInterval(t)
   }, [])
-  return { services, err, kpi }
+  return { services, err, kpi, signals }
 }
 
 function HealthRow({ s }) {
@@ -38,7 +43,7 @@ function HealthRow({ s }) {
 }
 
 export default function MissionControl() {
-  const { services, err, kpi } = useFleet()
+  const { services, err, kpi, signals } = useFleet()
   const list = services?.services ?? []
   const up = list.filter((s) => s.healthy).length
 
@@ -88,13 +93,17 @@ export default function MissionControl() {
         <section className="panel overflow-hidden">
           <div className="px-4 py-3 border-b border-[#232833] flex items-center justify-between">
             <span className="label">Recent signals</span>
-            <span className="text-[10px] uppercase tracking-widest text-slate-700">unified feed — P3</span>
+            <span className="num text-[11px] text-slate-600">{signals.length}</span>
           </div>
-          <div id="signals-feed">
-            <div className="p-8 text-center text-[13px] text-slate-600">
-              Unified activity timeline lands in Phase 3.<br />
-              <span className="text-slate-700">Hive delegations · Sentiel events · Aegis verdicts · Miser decisions</span>
-            </div>
+          <div id="signals-feed" data-testid="mission-signals">
+            {!signals.length && <div className="p-8 text-center text-sm text-slate-600">No recent signals.</div>}
+            {signals.slice(0, 12).map((signal, index) => (
+              <div key={index} className="flex items-center gap-3 px-4 py-2 border-t border-[#232833]/60">
+                <span className="badge badge-mono !text-[10px]">{signal.source}</span>
+                <span className="text-[13px] text-slate-200">{String(signal.kind)}</span>
+                <span className="ml-auto num text-[11px] text-slate-600">{String(signal.ts ?? '').slice(11, 19)}</span>
+              </div>
+            ))}
           </div>
         </section>
       </div>

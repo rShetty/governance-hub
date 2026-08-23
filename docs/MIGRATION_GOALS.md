@@ -112,7 +112,7 @@ flow can be exercised end to end.
 - [ ] End-to-end trace detail view.
 - [ ] Hash-chain/integrity indicators.
 - [ ] Evidence export.
-- [ ] Replace Mission Control placeholder feed.
+- [x] Replace Mission Control placeholder feed.
 - [ ] Cover filtering and trace reconstruction through local Playwright.
 
 ## Phase 8 - Risk And Compliance
