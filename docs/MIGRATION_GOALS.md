@@ -64,7 +64,7 @@ flow can be exercised end to end.
 
 - [~] Merge Hive MCP/skills with Relay connectors/backends into one DTO.
 - [ ] Install/uninstall catalog items.
-- [ ] Enable/disable backends and connectors.
+- [~] Enable/disable backends and connectors.
 - [ ] Connect/disconnect transports.
 - [x] Health-check individual catalog entries.
 - [ ] Display OAuth status/scopes without exposing secrets.

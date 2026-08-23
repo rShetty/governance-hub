@@ -1329,6 +1329,29 @@ pub async fn resource_create(
     }
 }
 
+/// POST /api/bff/catalog/relay/{backend_id}/toggle — enable/disable a Relay backend.
+pub async fn relay_backend_toggle(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(backend_id): Path<String>,
+) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let token = svc_env(&state, "RELAY_ADMIN_TOKEN");
+    match backend_post(
+        &state,
+        format!("{}/admin/backends/{backend_id}/toggle", relay_url()),
+        token.as_deref(),
+        json!({}),
+    )
+    .await
+    {
+        Ok(result) => Json(result).into_response(),
+        Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("relay: {error}")),
+    }
+}
+
 // ── Cost (Miser) ─────────────────────────────────────────────────────────────
 
 pub async fn cost_overview(State(state): State<AppState>, headers: HeaderMap) -> Response {

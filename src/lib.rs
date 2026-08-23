@@ -126,6 +126,10 @@ pub fn router(state: AppState) -> Router {
             "/api/bff/access/resources",
             get(bff::resources_list).post(bff::resource_create),
         )
+        .route(
+            "/api/bff/catalog/relay/{backend_id}/toggle",
+            post(bff::relay_backend_toggle),
+        )
         .route("/api/bff/cost", get(bff::cost_overview))
         .route("/api/bff/cost/keys", post(bff::miser_key_create))
         .route(

@@ -253,6 +253,10 @@ const server = http.createServer(async (request, response) => {
     return send(response, 200, { source: 'relay', id: 'github', status: 'connected', healthy: true })
   }
 
+  if (path === '/api/bff/catalog/relay/github/toggle' && request.method === 'POST') {
+    return send(response, 200, { backend_id: 'github', enabled: false })
+  }
+
   if (path === '/api/bff/access/resources' && request.method === 'GET') {
     return send(response, 200, [{ id: 'res_e2e_001', name: 'Fixture API' }])
   }
