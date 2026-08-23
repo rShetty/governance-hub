@@ -85,7 +85,6 @@ fn svc_env(_state: &AppState, key: &str) -> Option<String> {
 /// Hive service-account JWT, obtained lazily and cached in-process until
 /// shortly before expiry. Env: HIVE_SERVICE_EMAIL / HIVE_SERVICE_PASSWORD.
 async fn hive_service_token(state: &AppState) -> Option<String> {
-
     static CACHED: std::sync::OnceLock<tokio::sync::RwLock<Option<(String, u64)>>> =
         std::sync::OnceLock::new();
     let lock = CACHED.get_or_init(|| tokio::sync::RwLock::new(None));
