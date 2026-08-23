@@ -84,9 +84,9 @@ test('MCP catalog: association with agent works end-to-end', async ({ page }) =>
       skills: [],
     },
   })
-  console.log('DEBUG register:', reg.status(), (await reg.text()).slice(0, 120))
-  const agentId = ''
-  
+  const agent = await reg.json()
+  const agentId = agent.agent_id
+
   // Create an MCP server
   const mcpName = `assoc-mcp-${runId}`
   const mcp = await api.post(`${BASE}/api/svc/hive/api/mcp-servers`, {
