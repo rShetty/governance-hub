@@ -75,6 +75,15 @@ const server = http.createServer(async (request, response) => {
     return send(response, 200, packages)
   }
 
+  if (path === '/api/bff/activity') {
+    return send(response, 200, {
+      items: [
+        { source: 'sentiel', kind: 'dlp.violation', summary: 'API key pattern', ts: new Date().toISOString() },
+        { source: 'aegis', kind: 'egress.block', summary: 'evil.example.test', ts: new Date().toISOString() },
+      ],
+    })
+  }
+
   if (path === '/api/svc/forge/api/packages' && request.method === 'POST') {
     let raw = ''
     request.on('data', chunk => { raw += chunk })
