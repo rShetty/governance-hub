@@ -195,7 +195,18 @@ pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Respon
     if let Some(sid) = cookie_of(&headers, SESSION_COOKIE) {
         state.sessions.remove(&sid);
     }
-    let mut resp = Redirect::to("/").into_response();
+    let hub_origin =
+        std::env::var("HUB_EXTERNAL_URL").unwrap_or_else(|_| "https://governance.rajeev.me".into());
+    let idp_logout_url = format!(
+        "{}/logout?post_logout_redirect_uri={}",
+        state
+            .config
+            .oidc_issuer
+            .as_deref()
+            .unwrap_or("https://id.rajeev.me"),
+        urlencoding_escape(&format!("{hub_origin}/login")),
+    );
+    let mut resp = Redirect::to(&idp_logout_url).into_response();
     resp.headers_mut().append(
         header::SET_COOKIE,
         format!("{SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly")
