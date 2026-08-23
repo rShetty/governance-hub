@@ -1252,6 +1252,78 @@ pub async fn unified_catalog(State(state): State<AppState>, headers: HeaderMap) 
     .into_response()
 }
 
+/// POST /api/bff/catalog/{source}/{id}/health — check one catalog entry.
+pub async fn catalog_item_health(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((source, item_id)): Path<(String, String)>,
+) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let result = match source.as_str() {
+        "relay" => {
+            let backends = match backend_get(&state, format!("{}/mcp/backends", relay_url()), None)
+                .await
+            {
+                Ok(value) => value,
+                Err(error) => return now_err(StatusCode::BAD_GATEWAY, &format!("relay: {error}")),
+            };
+            let item = backends
+                .as_array()
+                .cloned()
+                .unwrap_or_default()
+                .into_iter()
+                .find(|item| {
+                    item.get("backend_id")
+                        .or_else(|| item.get("id"))
+                        .and_then(Value::as_str)
+                        == Some(item_id.as_str())
+                });
+            match item {
+                Some(item) => json!({
+                    "source": source,
+                    "id": item_id,
+                    "status": item.get("status").or_else(|| item.get("connected")).cloned().unwrap_or(json!("unknown")),
+                    "healthy": true,
+                }),
+                None => json!({
+                    "source": source,
+                    "id": item_id,
+                    "healthy": false,
+                    "reason": "catalog item not found",
+                }),
+            }
+        }
+        "hive" => {
+            let token = hive_service_token(&state).await;
+            let detail = match backend_get(
+                &state,
+                format!("{}/api/mcp-servers/{item_id}", hive_url()),
+                token.as_deref(),
+            )
+            .await
+            {
+                Ok(value) => value,
+                Err(error) => return now_err(StatusCode::BAD_GATEWAY, &format!("hive: {error}")),
+            };
+            json!({
+                "source": source,
+                "id": item_id,
+                "status": detail.get("status").cloned().unwrap_or(json!("registered")),
+                "healthy": true,
+            })
+        }
+        _ => {
+            return now_err(
+                StatusCode::NOT_IMPLEMENTED,
+                &format!("health checks are not implemented for source '{source}'"),
+            )
+        }
+    };
+    Json(result).into_response()
+}
+
 // ── Path-based proxy passthrough for deep product pages ─────────────────────
 
 #[derive(Deserialize)]

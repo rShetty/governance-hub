@@ -34,10 +34,22 @@ function useSvcRelay() {
   return s
 }
 
+async function checkCatalogHealth(source, itemId, setMessage) {
+  try {
+    const response = await fetch(`/api/bff/catalog/${encodeURIComponent(source)}/${encodeURIComponent(itemId)}/health`, { method: 'POST' })
+    const body = await response.json().catch(() => ({}))
+    if (!response.ok || body.healthy === false) throw new Error(body.reason || `status ${response.status}`)
+    setMessage({ ok: true, text: `${source}/${itemId}: ${body.status ?? 'healthy'}` })
+  } catch (error) {
+    setMessage({ ok: false, text: `${source}/${itemId}: ${String(error.message || error)}` })
+  }
+}
+
 export default function Tools() {
   const relay = useSvcRelay()
   const bff = useBff()
   const catalog = useUnifiedCatalog()
+  const [healthMessage, setHealthMessage] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [extra, setExtra] = useState([])
 
@@ -74,12 +86,22 @@ export default function Tools() {
                   <td><span className="badge badge-mono !text-[10px]">{item.source}</span></td>
                   <td>{String(item.kind)}</td>
                   <td><span className={`badge ${String(item.status) === 'false' ? 'badge-warn' : 'badge-ok'}`}>{String(item.status)}</span></td>
+                  <td>
+                    <button
+                      className="btn btn-ghost !py-1 !px-2 !text-[11px]"
+                      data-testid={`catalog-health-${item.source}-${item.id}`}
+                      onClick={() => checkCatalogHealth(item.source, String(item.id), setHealthMessage)}
+                    >
+                      Health
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </section>
+      {healthMessage && <div className={healthMessage.ok ? 'text-sm text-teal-300' : 'text-sm text-rose-400'} data-testid="catalog-health-result">{healthMessage.text}</div>}
 
       <div className="grid xl:grid-cols-2 gap-6">
         <section className="panel overflow-hidden">

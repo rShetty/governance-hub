@@ -66,7 +66,7 @@ flow can be exercised end to end.
 - [ ] Install/uninstall catalog items.
 - [ ] Enable/disable backends and connectors.
 - [ ] Connect/disconnect transports.
-- [ ] Health-check individual catalog entries.
+- [x] Health-check individual catalog entries.
 - [ ] Display OAuth status/scopes without exposing secrets.
 - [ ] Grant/revoke agent and human access.
 - [ ] Detect grants lacking an equivalent Patroculus policy.

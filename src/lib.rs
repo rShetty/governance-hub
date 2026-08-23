@@ -120,6 +120,10 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/bff/tools", get(bff::tools_overview))
         .route("/api/bff/catalog", get(bff::unified_catalog))
+        .route(
+            "/api/bff/catalog/{source}/{item_id}/health",
+            post(bff::catalog_item_health),
+        )
         .route("/api/bff/proxy/{backend}/{*rest}", get(bff::passthrough))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),

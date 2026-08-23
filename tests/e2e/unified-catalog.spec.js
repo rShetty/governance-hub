@@ -7,4 +7,7 @@ test('Tools view merges Relay and Hive capabilities into one catalog', async ({ 
   await expect(page.getByTestId('unified-catalog')).toBeVisible()
   await expect(page.getByTestId('catalog-relay-connector')).toContainText('GitHub connector')
   await expect(page.getByTestId('catalog-hive-mcp-server')).toContainText('Fixture MCP server')
+
+  await page.getByTestId('catalog-health-relay-github').click()
+  await expect(page.getByTestId('catalog-health-result')).toContainText('relay/github: connected')
 })

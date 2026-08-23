@@ -178,6 +178,10 @@ const server = http.createServer(async (request, response) => {
     return send(response, 200, { status: 'healthy' })
   }
 
+  if (path === '/api/bff/catalog/relay/github/health' && request.method === 'POST') {
+    return send(response, 200, { source: 'relay', id: 'github', status: 'connected', healthy: true })
+  }
+
   if (path === '/api/bff/cost/keys' && request.method === 'POST') {
     let raw = ''
     request.on('data', chunk => { raw += chunk })
