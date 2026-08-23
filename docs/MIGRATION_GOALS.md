@@ -37,7 +37,7 @@ flow can be exercised end to end.
 ## Phase 2 - Identity Lifecycle
 
 - [~] Unified actor detail model linking Argus, Hive, and Patroclus IDs.
-- [ ] Mint machine identity from Agents UI.
+- [x] Mint machine identity from Agents UI.
 - [x] Revoke and restore Argus identities.
 - [ ] Create and remove Hive runtime agents.
 - [ ] Link Patroclus actor/agent records.

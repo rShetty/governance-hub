@@ -591,6 +591,72 @@ pub async fn policy_simulate(
     .into_response()
 }
 
+#[derive(Deserialize)]
+pub struct MachineIdentityRequest {
+    pub name: String,
+    #[serde(default)]
+    pub scopes: Vec<String>,
+}
+
+/// POST /api/bff/identities/mint — mint an Argus machine identity.
+/// The one-time secret is never returned through the browser response.
+pub async fn identity_mint(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<MachineIdentityRequest>,
+) -> Response {
+    let user = match require_admin(&state, &headers).await {
+        Ok(user) => user,
+        Err(response) => return response,
+    };
+    if body.name.trim().is_empty() || body.name.len() > 120 {
+        return now_err(StatusCode::BAD_REQUEST, "invalid name");
+    }
+    let issuer = state.config.oidc_issuer.clone().unwrap_or_default();
+    let credentials = format!(
+        "{}:{}",
+        state.config.oidc_client_id.as_deref().unwrap_or(""),
+        state.config.oidc_client_secret.as_deref().unwrap_or("")
+    );
+    use base64::Engine as _;
+    let authorization = format!(
+        "Basic {}",
+        base64::engine::general_purpose::STANDARD.encode(credentials)
+    );
+    match state
+        .client
+        .post(format!("{issuer}/api/admin/agents/mint"))
+        .header(header::AUTHORIZATION, authorization)
+        .json(&json!({
+            "name": body.name,
+            "scopes": body.scopes,
+            "metadata": {
+                "created_by": user.email,
+                "via": "governance-hub"
+            }
+        }))
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+    {
+        Ok(response) => {
+            let status =
+                StatusCode::from_u16(response.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+            let mut payload: Value = response.json().await.unwrap_or(Value::Null);
+            if let Some(object) = payload.as_object_mut() {
+                object.remove("secret");
+                object.insert("secret_delivery".into(), json!("secure operator channel"));
+                object.insert("operator".into(), json!(user.email));
+            }
+            (status, Json(payload)).into_response()
+        }
+        Err(error) => now_err(
+            StatusCode::BAD_GATEWAY,
+            &format!("argus unreachable: {error}"),
+        ),
+    }
+}
+
 mod argus {
     use super::*;
 

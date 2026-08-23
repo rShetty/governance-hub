@@ -149,6 +149,24 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
+  if (path === '/api/bff/identities/mint' && request.method === 'POST') {
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      const identity = {
+        id: `agt_${crypto.randomUUID().slice(0, 8)}`,
+        name: body.name,
+        owner: 'e2e@governance.test',
+        scopes: body.scopes ?? [],
+        status: 'active',
+      }
+      identities.push(identity)
+      send(response, 200, { agent_id: identity.id, secret_delivery: 'secure operator channel', operator: 'e2e@governance.test' })
+    })
+    return
+  }
+
   if (path === '/api/bff/cost/keys' && request.method === 'POST') {
     let raw = ''
     request.on('data', chunk => { raw += chunk })

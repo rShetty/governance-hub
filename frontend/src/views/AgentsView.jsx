@@ -10,6 +10,7 @@ export default function AgentsView() {
   const [hive, setHive] = useState({ data: null, err: '' })
   const [dir, setDir] = useState({ data: null, err: '' })
   const [actionError, setActionError] = useState('')
+  const [identityForm, setIdentityForm] = useState({ name: '', scopes: 'relay:call' })
 
   useEffect(() => {
     svcGet('hive', '/api/agents?limit=100&order=recent')
@@ -66,6 +67,27 @@ export default function AgentsView() {
     }
   }
 
+  const mintIdentity = async (event) => {
+    event.preventDefault()
+    setActionError('')
+    try {
+      const response = await fetch('/api/bff/identities/mint', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          name: identityForm.name,
+          scopes: identityForm.scopes.split(',').map((scope) => scope.trim()).filter(Boolean),
+        }),
+      })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.error || `status ${response.status}`)
+      setActionError(`Identity ${body.agent_id} minted. Retrieve the one-time secret from the secure operator channel.`)
+      setIdentityForm({ name: '', scopes: 'relay:call' })
+    } catch (error) {
+      setActionError(String(error.message || error))
+    }
+  }
+
   const runtimeRaw = Array.isArray(hive.data)
     ? hive.data
     : (hive.data?.items ?? hive.data?.agents ?? [])
@@ -85,6 +107,13 @@ export default function AgentsView() {
           <button className="btn btn-ghost mt-2" onClick={emergencyKill}>Emergency stop</button>
         </div>
       </div>
+
+      <form className="panel p-5 space-y-3" data-testid="identity-mint-form" onSubmit={mintIdentity}>
+        <h2 className="font-semibold">Mint machine identity</h2>
+        <input data-testid="identity-name" required placeholder="agent name" value={identityForm.name} onChange={(event) => setIdentityForm({ ...identityForm, name: event.target.value })} />
+        <input data-testid="identity-scopes" placeholder="relay:call, miser:route" value={identityForm.scopes} onChange={(event) => setIdentityForm({ ...identityForm, scopes: event.target.value })} />
+        <button className="btn btn-primary" data-testid="identity-mint-submit">Mint</button>
+      </form>
 
       <div className="grid xl:grid-cols-2 gap-6">
         {/* Runtime agents — Hive */}
