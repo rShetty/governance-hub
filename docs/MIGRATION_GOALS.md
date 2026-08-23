@@ -108,7 +108,7 @@ flow can be exercised end to end.
 - [ ] Canonical event DTO.
 - [~] Normalizers for all eight sources.
 - [ ] Unified timeline endpoint.
-- [ ] Actor/session/resource/service/severity filters.
+- [~] Actor/session/resource/service/severity filters.
 - [ ] End-to-end trace detail view.
 - [~] Hash-chain/integrity indicators.
 - [ ] Evidence export.

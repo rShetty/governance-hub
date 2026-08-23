@@ -888,9 +888,48 @@ pub async fn policy_list(State(state): State<AppState>, headers: HeaderMap) -> R
 pub struct PageQuery {
     #[serde(default = "default_limit")]
     limit: u32,
+    #[serde(default)]
+    source: Option<String>,
+    #[serde(default)]
+    actor: Option<String>,
+    #[serde(default)]
+    session_id: Option<String>,
+    #[serde(default)]
+    resource: Option<String>,
+    #[serde(default)]
+    severity: Option<String>,
 }
 fn default_limit() -> u32 {
     25
+}
+
+fn activity_matches(item: &Value, q: &PageQuery) -> bool {
+    let contains = |field: &str, filter: &Option<String>| {
+        filter.as_deref().map_or(true, |wanted| {
+            item.get(field)
+                .map(Value::to_string)
+                .unwrap_or_default()
+                .to_lowercase()
+                .contains(&wanted.to_lowercase())
+        })
+    };
+    contains("source", &q.source)
+        && (q.actor.is_none()
+            || item["raw"]
+                .to_string()
+                .to_lowercase()
+                .contains(&q.actor.as_deref().unwrap_or_default().to_lowercase()))
+        && (q.session_id.is_none()
+            || item["raw"]
+                .to_string()
+                .to_lowercase()
+                .contains(&q.session_id.as_deref().unwrap_or_default().to_lowercase()))
+        && (q.resource.is_none() || contains("summary", &q.resource))
+        && (q.severity.is_none()
+            || item["raw"]
+                .to_string()
+                .to_lowercase()
+                .contains(&q.severity.as_deref().unwrap_or_default().to_lowercase()))
 }
 
 pub async fn activity_feed(
@@ -1007,7 +1046,11 @@ pub async fn activity_feed(
         let kb = b["ts"].as_str().unwrap_or("").to_string();
         kb.cmp(&ka)
     });
-    Json(json!({ "items": items.into_iter().take(q.limit as usize * 2).collect::<Vec<_>>() }))
+    let filtered = items
+        .into_iter()
+        .filter(|item| activity_matches(item, &q))
+        .collect::<Vec<_>>();
+    Json(json!({ "items": filtered.into_iter().take(q.limit as usize * 2).collect::<Vec<_>>() }))
         .into_response()
 }
 
