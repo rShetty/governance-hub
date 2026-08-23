@@ -112,6 +112,7 @@ pub fn router(state: AppState) -> Router {
             get(bff::policy_list).post(bff::policy_create),
         )
         .route("/api/bff/activity", get(bff::activity_feed))
+        .route("/api/bff/trace/{session_id}", get(bff::trace_detail))
         .route("/api/bff/cost", get(bff::cost_overview))
         .route("/api/bff/cost/keys", post(bff::miser_key_create))
         .route(

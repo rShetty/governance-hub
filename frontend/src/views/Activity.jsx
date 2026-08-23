@@ -4,6 +4,18 @@ export default function Activity() {
   const [items, setItems] = useState(null)
   const [error, setError] = useState('')
   const [filters, setFilters] = useState({ source: '', actor: '', session_id: '', resource: '', severity: '' })
+  const [trace, setTrace] = useState(null)
+
+  const loadTrace = async (sessionId) => {
+    if (!sessionId.trim()) return setTrace(null)
+    try {
+      const response = await fetch(`/api/bff/trace/${encodeURIComponent(sessionId)}`)
+      if (!response.ok) throw new Error(`status ${response.status}`)
+      setTrace(await response.json())
+    } catch (cause) {
+      setTrace({ error: String(cause.message || cause) })
+    }
+  }
 
   useEffect(() => {
     const query = new URLSearchParams({ limit: '50', ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value)) })
@@ -23,7 +35,7 @@ export default function Activity() {
       <div className="panel overflow-hidden" data-testid="activity-feed">
         <div className="p-4 grid md:grid-cols-5 gap-2 border-b border-[#232833]">
           {['source', 'actor', 'session_id', 'resource', 'severity'].map((field) => (
-            <input key={field} data-testid={`activity-filter-${field}`} placeholder={field.replace('_', ' ')} value={filters[field]} onChange={(event) => setFilters({ ...filters, [field]: event.target.value })} />
+            <input key={field} data-testid={`activity-filter-${field}`} placeholder={field.replace('_', ' ')} value={filters[field]} onChange={(event) => setFilters({ ...filters, [field]: event.target.value })} onBlur={() => field === 'session_id' && loadTrace(filters.session_id)} onKeyDown={(event) => event.key === 'Enter' && field === 'session_id' && loadTrace(filters.session_id)} />
           ))}
         </div>
         {!items && !error && <div className="p-6 text-sm text-slate-600">Loading activity…</div>}
@@ -37,6 +49,16 @@ export default function Activity() {
           </div>
         ))}
       </div>
+      {trace && (
+        <section className="panel p-4" data-testid="trace-detail">
+          {trace.error ? <p className="text-sm text-rose-400">{trace.error}</p> : (
+            <>
+              <h2 className="font-semibold">Trace · {trace.session_id}</h2>
+              <pre className="mt-2 text-xs font-mono text-slate-300 whitespace-pre-wrap">{JSON.stringify(trace.events, null, 2)}</pre>
+            </>
+          )}
+        </section>
+      )}
     </div>
   )
 }

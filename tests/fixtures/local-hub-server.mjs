@@ -100,6 +100,16 @@ const server = http.createServer(async (request, response) => {
     })
   }
 
+  if (path === '/api/bff/trace/session-e2e') {
+    return send(response, 200, {
+      session_id: 'session-e2e',
+      events: [
+        { source: 'patroclus', ts: '2026-01-01T00:00:00Z', detail: { action: 'policy.evaluate' } },
+        { source: 'aegis', ts: '2026-01-01T00:00:01Z', detail: { action: 'egress.allowed' } },
+      ],
+    })
+  }
+
   if (path === '/api/bff/cost') {
     return send(response, 200, { configured: true, keys: miserKeys })
   }

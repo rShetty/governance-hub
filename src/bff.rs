@@ -1054,6 +1054,107 @@ pub async fn activity_feed(
         .into_response()
 }
 
+/// GET /api/bff/trace/{session_id} — correlated cross-service trace.
+pub async fn trace_detail(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(session_id): Path<String>,
+) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let s_tok = svc_env(&state, "SENTIEL_ADMIN_TOKEN");
+    let a_tok = svc_env(&state, "AEGIS_ADMIN_TOKEN");
+    let p_tok = svc_env(&state, "PATROCLUS_ADMIN_TOKEN");
+    let m_tok = svc_env(&state, "MISER_ADMIN_KEY");
+    let (events, egress, audit, keys) = tokio::join!(
+        backend_get(
+            &state,
+            format!("{}/api/events/session/{session_id}", sentiel_url()),
+            s_tok.as_deref()
+        ),
+        backend_get(
+            &state,
+            format!("{}/api/egress/log?limit=100", aegis_url()),
+            a_tok.as_deref()
+        ),
+        backend_get(
+            &state,
+            format!("{}/v1/admin/audit", patroclus_url()),
+            p_tok.as_deref()
+        ),
+        backend_get(
+            &state,
+            format!("{}/admin/keys", miser_url()),
+            m_tok.as_deref()
+        ),
+    );
+
+    let mut trace = Vec::new();
+    if let Ok(Value::Array(list)) = events {
+        for event in list {
+            trace.push(
+                json!({ "source": "sentiel", "ts": event.get("created_at"), "detail": event }),
+            );
+        }
+    }
+    if let Ok(Value::Array(list)) = egress {
+        for item in list {
+            if item
+                .to_string()
+                .to_lowercase()
+                .contains(&session_id.to_lowercase())
+            {
+                trace.push(
+                    json!({ "source": "aegis", "ts": item.get("logged_at"), "detail": item }),
+                );
+            }
+        }
+    }
+    if let Ok(Value::Array(list)) = audit {
+        for entry in list {
+            if entry
+                .to_string()
+                .to_lowercase()
+                .contains(&session_id.to_lowercase())
+            {
+                trace.push(
+                    json!({ "source": "patroclus", "ts": entry.get("timestamp"), "detail": entry }),
+                );
+            }
+        }
+    }
+    if let Ok(Value::Object(object)) = keys {
+        for key in object
+            .get("keys")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default()
+        {
+            if key
+                .to_string()
+                .to_lowercase()
+                .contains(&session_id.to_lowercase())
+            {
+                trace
+                    .push(json!({ "source": "miser", "ts": key.get("created_at"), "detail": key }));
+            }
+        }
+    }
+    trace.sort_by(|a, b| {
+        a["ts"]
+            .as_str()
+            .unwrap_or("")
+            .cmp(b["ts"].as_str().unwrap_or(""))
+    });
+    Json(json!({
+        "session_id": session_id,
+        "events": trace,
+        "total": trace.len(),
+    }))
+    .into_response()
+}
+
 // ── Cost (Miser) ─────────────────────────────────────────────────────────────
 
 pub async fn cost_overview(State(state): State<AppState>, headers: HeaderMap) -> Response {
