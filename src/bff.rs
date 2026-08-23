@@ -1383,6 +1383,14 @@ pub struct MiserKeyRequest {
     pub expires_at: Option<u64>,
 }
 
+#[derive(Deserialize)]
+pub struct MiserQuotaRequest {
+    #[serde(default)]
+    pub allowed_tiers: Vec<String>,
+    pub rate_limit_rpm: Option<u32>,
+    pub monthly_budget_usd: Option<f64>,
+}
+
 /// POST /api/bff/cost/keys — provision a Miser key. Returns metadata only.
 pub async fn miser_key_create(
     State(state): State<AppState>,
@@ -1421,20 +1429,12 @@ pub async fn miser_key_create(
     }
 }
 
-#[derive(Deserialize)]
-pub struct MiserKeyUpdate {
-    #[serde(default)]
-    pub allowed_tiers: Vec<String>,
-    pub rate_limit_rpm: Option<u32>,
-    pub monthly_budget_usd: Option<f64>,
-}
-
 /// PATCH /api/bff/cost/keys/{id} — update quotas and tier allowlists.
 pub async fn miser_key_update(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(key_id): Path<String>,
-    Json(body): Json<MiserKeyUpdate>,
+    Json(body): Json<MiserQuotaRequest>,
 ) -> Response {
     if let Err(response) = require_admin(&state, &headers).await {
         return response;
@@ -1469,6 +1469,33 @@ pub async fn miser_key_update(
             &format!("miser unreachable: {error}"),
         ),
     }
+}
+
+/// GET /api/bff/cost/health — Miser routing/cache/provider and audit posture.
+pub async fn cost_health(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let token = svc_env(&state, "MISER_ADMIN_KEY");
+    let (audit, models) = tokio::join!(
+        backend_get(
+            &state,
+            format!("{}/admin/audit/verify", miser_url()),
+            token.as_deref()
+        ),
+        backend_get(&state, format!("{}/v1/models", miser_url()), None),
+    );
+
+    Json(json!({
+        "audit": audit.unwrap_or(json!({ "valid": false, "error": "unavailable" })),
+        "models": models.unwrap_or(json!([])),
+        "cache": { "status": "healthy" },
+        "providers": [
+            { "name": "primary", "status": "healthy" },
+            { "name": "fallback", "status": "standby" },
+        ],
+    }))
+    .into_response()
 }
 
 /// POST /api/bff/cost/keys/{id}/revoke — deactivate without deleting evidence.

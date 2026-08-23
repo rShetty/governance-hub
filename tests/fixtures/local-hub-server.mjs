@@ -10,7 +10,16 @@ const identities = [
 ]
 const approvals = [{ id: 'apr_e2e_001', agent_id: 'agt_e2e_001', action: 'deploy' }]
 const sessions = [{ id: 'ses_e2e_001', agent_id: 'agt_e2e_001', active: true }]
-const miserKeys = [{ id: 'key_e2e_001', owner: 'fixture-agent', allowed_tiers: [], active: true }]
+const miserKeys = [{
+  id: 'key_e2e_001',
+  owner: 'fixture-agent',
+  allowed_tiers: ['simple'],
+  rate_limit_rpm: 120,
+  monthly_budget_usd: 50,
+  spend_total_usd: 1.25,
+  expires_at: Math.floor(Date.now() / 1000) + 86400,
+  active: true,
+}]
 const runtimeAgents = []
 const mcpServers = [
   { id: 'server-e2e', name: 'Fixture MCP server', transport: 'sse', url: 'https://mcp.example.test/sse', description: '', authorized_agents: ['agt_e2e_001'] },
@@ -286,6 +295,14 @@ const server = http.createServer(async (request, response) => {
 
   if (path === '/api/bff/cost') {
     return send(response, 200, { configured: true, keys: miserKeys })
+  }
+
+  if (path === '/api/bff/cost/health' && request.method === 'GET') {
+    return send(response, 200, {
+      audit: { valid: true, entries: 12 },
+      cache: { status: 'healthy' },
+      providers: [{ name: 'primary', status: 'healthy' }, { name: 'fallback', status: 'standby' }],
+    })
   }
 
   if (path === '/api/svc/sentiel/api/alerts') {

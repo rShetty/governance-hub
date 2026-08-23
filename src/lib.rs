@@ -136,6 +136,7 @@ pub fn router(state: AppState) -> Router {
             "/api/bff/cost/keys/{key_id}",
             patch(bff::miser_key_update).post(bff::miser_key_revoke),
         )
+        .route("/api/bff/cost/health", get(bff::cost_health))
         .route("/api/bff/tools", get(bff::tools_overview))
         .route("/api/bff/catalog", get(bff::unified_catalog))
         .route(
