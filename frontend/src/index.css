@@ -135,3 +135,32 @@ table.data tbody tr:hover td { background: rgba(23,27,36,.6); }
 ::-webkit-scrollbar-track { background: transparent; }
 
 a { color: var(--accent); }
+
+/* Every form control gets the same ergonomic treatment, including controls
+   rendered without an explicit className in view-specific forms. */
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+  width: 100%;
+  padding: 9px 12px;
+  background: var(--g0);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text-hi);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(45,212,191,.12);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-lo);
+}

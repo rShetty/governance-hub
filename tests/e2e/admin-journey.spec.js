@@ -2,8 +2,6 @@ import { test, expect } from '@playwright/test'
 
 test('Admin signs in and completes the governance onboarding journey', async ({ page }) => {
   await page.goto('/')
-
-  // Admin is authenticated and sees the control plane.
   await expect(page.getByText('Local E2E Admin')).toBeVisible()
   await expect(page.getByText('administrator')).toBeVisible()
 

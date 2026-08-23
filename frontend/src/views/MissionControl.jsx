@@ -46,31 +46,51 @@ export default function MissionControl() {
   const { services, err, kpi, signals } = useFleet()
   const list = services?.services ?? []
   const up = list.filter((s) => s.healthy).length
+  const criticalSignals = signals.filter((signal) => /violation|blocked|revoked|critical/i.test(String(signal.kind))).length
 
   return (
     <div className="space-y-6 max-w-[1400px]">
       <div>
-        <h1 className="h-display text-2xl">Mission Control</h1>
-        <p className="text-[13px] text-slate-500 mt-0.5">Fleet posture across the governance stack.</p>
+        <h1 className="h-display text-[30px] leading-tight">Mission Control</h1>
+        <p className="text-[13px] text-slate-500 mt-1">Operational posture, governance risk, and control coverage in one place.</p>
       </div>
 
       {/* KPI strip */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-[#232833] rounded-xl overflow-hidden border border-[#232833]">
-        <div className="bg-[#10131a] p-5">
+      <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
+        <div className="panel p-5 flex flex-col justify-between min-h-[124px]">
           <div className="label mb-2">Backends up</div>
-          <div className="num text-[28px] leading-none text-slate-100">{services ? `${up}<span class="text-slate-600">/${list.length}` : '—'}</div>
+          <div>
+            <div className="num text-[32px] leading-none text-slate-100">{services ? up : '—'}<span className="text-slate-600 text-lg">/{list.length || 0}</span></div>
+            <div className="text-xs text-slate-600 mt-2">live fleet health</div>
+          </div>
         </div>
-        <div className="bg-[#10131a] p-5">
+        <div className="panel p-5 flex flex-col justify-between min-h-[124px]">
           <div className="label mb-2">Agent identities</div>
-          <div className="num text-[28px] leading-none text-slate-100">{kpi.agents ?? '—'}</div>
+          <div>
+            <div className="num text-[32px] leading-none text-slate-100">{kpi.agents ?? '—'}</div>
+            <div className="text-xs text-slate-600 mt-2">machine principals</div>
+          </div>
         </div>
-        <div className="bg-[#10131a] p-5">
+        <div className="panel p-5 flex flex-col justify-between min-h-[124px]">
           <div className="label mb-2">Spend today</div>
-          <div className="num text-[28px] leading-none text-teal-300">{kpi.spend ?? '—'}</div>
+          <div>
+            <div className="num text-[32px] leading-none text-teal-300">{kpi.spend ?? '—'}</div>
+            <div className="text-xs text-slate-600 mt-2">routing keys active</div>
+          </div>
         </div>
-        <div className="bg-[#10131a] p-5">
+        <div className="panel p-5 flex flex-col justify-between min-h-[124px]">
           <div className="label mb-2">Open alerts</div>
-          <div className="num text-[28px] leading-none text-slate-100">{kpi.alerts ?? '—'}</div>
+          <div>
+            <div className={`num text-[32px] leading-none ${Number(kpi.alerts) > 0 ? 'text-amber-300' : 'text-slate-100'}`}>{kpi.alerts ?? '—'}</div>
+            <div className="text-xs text-slate-600 mt-2">recent risk events</div>
+          </div>
+        </div>
+        <div className="panel p-5 flex flex-col justify-between min-h-[124px]">
+          <div className="label mb-2">Critical signals</div>
+          <div>
+            <div className={`num text-[32px] leading-none ${criticalSignals > 0 ? 'text-rose-300' : 'text-slate-100'}`}>{signals.length ? criticalSignals : '—'}</div>
+            <div className="text-xs text-slate-600 mt-2">require review</div>
+          </div>
         </div>
       </div>
 
@@ -87,6 +107,7 @@ export default function MissionControl() {
           </div>
           {!services && !err && <div className="p-4 text-sm text-slate-600">Probing…</div>}
           {list.map((s) => <HealthRow key={s.id} s={s} />)}
+          {!list.length && !err && <div className="p-8 text-center text-sm text-slate-600">No backend status available.</div>}
         </section>
 
         {/* Recent signals */}
@@ -95,7 +116,7 @@ export default function MissionControl() {
             <span className="label">Recent signals</span>
             <span className="num text-[11px] text-slate-600">{signals.length}</span>
           </div>
-          <div id="signals-feed" data-testid="mission-signals">
+          <div id="signals-feed" data-testid="mission-signals" className="max-h-[360px] overflow-y-auto">
             {!signals.length && <div className="p-8 text-center text-sm text-slate-600">No recent signals.</div>}
             {signals.slice(0, 12).map((signal, index) => (
               <div key={index} className="flex items-center gap-3 px-4 py-2 border-t border-[#232833]/60">

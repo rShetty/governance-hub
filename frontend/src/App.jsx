@@ -12,14 +12,16 @@ import Security from './views/Security.jsx'
 import Egress from './views/Egress.jsx'
 import SupplyChain from './views/SupplyChain.jsx'
 import Compliance from './views/Compliance.jsx'
+import MyWorkspace from './views/MyWorkspace.jsx'
 
 const NAV = [
   { id: 'mission', label: 'Mission Control', icon: 'M3 12h4l3-8 4 16 3-8h4', view: MissionControl },
+  { id: 'workspace', label: 'My Workspace', icon: 'M4 6h16M4 12h16M4 18h10', view: MyWorkspace },
   { id: 'agents', label: 'Agents', icon: 'M12 2a4 4 0 0 1 4 4c0 1.1-.45 2.1-1.17 2.83A6 6 0 0 1 18 14v2H6v-2a6 6 0 0 1 3.17-5.17A4 4 0 0 1 12 2z', view: AgentsView, admin: false },
   { id: 'activity', label: 'Activity', icon: 'M22 12h-4l-3 9L9 3l-3 9H2', view: Activity },
   { id: 'access', label: 'Access', icon: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a7.8 7.8 0 0 0 .1-1 7.8 7.8 0 0 0-.1-1l2.1-1.6a.5.5 0 0 0 .1-.7l-2-3.4a.5.5 0 0 0-.6-.2l-2.5 1a7.7 7.7 0 0 0-1.7-1l-.4-2.6A.5.5 0 0 0 14 3h-4a.5.5 0 0 0-.5.4L9.1 6a7.7 7.7 0 0 0-1.7 1l-2.5-1a.5.5 0 0 0-.6.2l-2 3.4a.5.5 0 0 0 .1.7L4.5 13a7.8 7.8 0 0 0 0 2l-2.1 1.6a.5.5 0 0 0-.1.7l2 3.4c.1.2.4.3.6.2l2.5-1c.5.4 1.1.7 1.7 1l.4 2.6c0 .3.2.5.5.5h4c.2 0 .5-.2.5-.5l.4-2.6c.6-.3 1.2-.6 1.7-1l2.5 1c.2.1.5 0 .6-.2l2-3.4a.5.5 0 0 0-.1-.7L19.4 15z', view: Access },
   { id: 'tools', label: 'Tools & MCP', icon: 'M14.7 6.3a5 5 0 0 0-6.6 6.6L3 18v3h3l5.1-5.1a5 5 0 0 0 6.6-6.6L14 13l-3-3 3.7-3.7z', view: Tools },
-  { id: 'cost', label: 'Cost & Routing', icon: 'M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6', view: Cost },
+  { id: 'cost', label: 'Cost & Routing', icon: 'M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6', view: Cost, admin: true },
   { id: 'security', label: 'Security', icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', view: Security },
   { id: 'egress', label: 'Egress', icon: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3', view: Egress },
   { id: 'supply-chain', label: 'Supply Chain', icon: 'M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zM16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2', view: SupplyChain },
@@ -30,6 +32,8 @@ const ADMIN_NAV = [
   { id: 'identities', label: 'Identity Directory', icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-3a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75', view: Identities },
   { id: 'services', label: 'Service Registry', icon: 'M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6', view: Services },
 ]
+
+const MEMBER_ALLOWED = new Set(['mission', 'workspace', 'agents', 'activity', 'tools', 'supply-chain'])
 
 function Icon({ d }) {
   return (
@@ -45,10 +49,16 @@ export default function App() {
   const [navOpen, setNavOpen] = useState(false)
   const [user, setUser] = useState(undefined)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const isAdmin = !!user?.is_admin || !!user?.admin
 
   useEffect(() => {
     fetchMe().then(setUser).catch(() => setUser(null))
   }, [])
+
+  useEffect(() => {
+    if (!user || isAdmin) return
+    if (!MEMBER_ALLOWED.has(view)) setView('mission')
+  }, [user, isAdmin, view])
 
   useEffect(() => {
     const onKey = (e) => {
@@ -62,8 +72,10 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  const isAdmin = !!user?.is_admin || !!user?.admin
-  const nav = user ? [...NAV, ...(isAdmin ? ADMIN_NAV : [])] : []
+  const nav = user ? [
+    ...NAV.filter((item) => isAdmin || !item.admin),
+    ...(isAdmin ? ADMIN_NAV : []),
+  ] : []
   const current = [...NAV, ...ADMIN_NAV].find((n) => n.id === view)
   const Current = current?.view ?? MissionControl
 

@@ -27,11 +27,12 @@ const server = http.createServer(async (request, response) => {
   const path = url.pathname
 
   if (path === '/api/me') {
+    const isMember = String(request.headers.cookie || '').includes('e2e_member=1')
     return send(response, 200, {
       sub: 'usr_local_e2e',
       email: 'e2e@governance.test',
       name: 'Local E2E Admin',
-      is_admin: true,
+      is_admin: !isMember,
     })
   }
 
@@ -271,6 +272,22 @@ const server = http.createServer(async (request, response) => {
         },
       ],
     })
+  }
+
+  if (path === '/api/bff/my/assignments') {
+    return send(response, 200, {
+      agents: [{ id: 'agt_e2e_001', name: 'Fixture Agent', status: identities[0].status }],
+      mcps: [{ id: 'server-e2e', name: 'Fixture MCP server', status: 'active' }],
+    })
+  }
+
+  if (path === '/__test__/member') {
+    response.writeHead(200, {
+      'content-type': 'application/json',
+      'set-cookie': 'e2e_member=1; Path=/; Max-Age=3600',
+    })
+    response.end(JSON.stringify({ memberMode: true }))
+    return
   }
 
   if (path.match(/^\/api\/svc\/sentiel\/api\/compliance\/(soc2|gdpr|eu_ai_act|hipaa)$/) && request.method === 'GET') {
