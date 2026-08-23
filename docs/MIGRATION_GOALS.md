@@ -39,21 +39,23 @@ flow can be exercised end to end.
 - [~] Unified actor detail model linking Argus, Hive, and Patroclus IDs.
 - [x] Mint machine identity from Agents UI.
 - [x] Revoke and restore Argus identities.
-- [~] Create and remove Hive runtime agents.
+- [x] Create Hive runtime agents.
+- [ ] Remove or reversibly retire Hive runtime agents.
 - [ ] Link Patroclus actor/agent records.
-- [~] Trigger Patroclus emergency kill and restore.
+- [x] Trigger Patroclus emergency kill.
+- [ ] Trigger Patroclus restore (requires explicit backend safety approval).
 - [x] Revoke Patroclus tokens.
-- [~] Show per-backend success/failure for cross-service operations.
-- [~] Require explicit confirmation and operator attribution.
-- [~] Cover every lifecycle action through local Playwright.
+- [ ] Show per-backend success/failure for cross-service operations.
+- [ ] Require explicit confirmation and operator attribution.
+- [ ] Cover every lifecycle action through local Playwright.
 
 ## Phase 3 - Access Operations
 
-- [~] Resource list/create/detail management.
-- [~] Policy create/read/edit/delete management.
-- [~] Approval queue approve/deny actions.
+- [ ] Resource list/create/detail management.
+- [ ] Policy create/read/edit/delete management.
+- [ ] Approval queue approve/deny actions.
 - [x] Delegation issuance and grant revocation.
-- [~] Session inspector with trajectory and constraints.
+- [ ] Session inspector with trajectory and constraints.
 - [x] Session kill action.
 - [x] Token revocation action.
 - [~] Policy simulator using Patroclus check-access.
@@ -117,17 +119,17 @@ flow can be exercised end to end.
 
 ## Phase 8 - Risk And Compliance
 
-- [ ] Aggregate DLP findings.
-- [ ] Aggregate anomaly alerts.
-- [ ] Alert acknowledgment.
-- [~] SOC 2 / GDPR / EU AI Act / HIPAA report views.
+- [x] Aggregate DLP findings.
+- [x] Aggregate anomaly alerts.
+- [x] Alert acknowledgment.
+- [x] SOC 2 / GDPR / EU AI Act / HIPAA report views.
 - [ ] Control coverage and evidence gaps.
 - [ ] Aegis destination policy management.
 - [x] Geo policy/check visibility.
-- [ ] Agent attestation/verification flows.
+- [x] Agent attestation/verification flows.
 - [ ] Containment workflow for failed attestations.
 - [ ] Remediation ownership/status.
-- [~] Report/evidence export.
+- [x] Report/evidence export.
 - [ ] Cover risk workflows through local Playwright.
 
 ## Phase 9 - Backend UI Retirement
