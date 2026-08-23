@@ -105,7 +105,7 @@ export default function Tools() {
         )}
         {catalog.data?.items?.length > 0 && (
           <table className="data" data-testid="catalog-table">
-            <thead><tr><th>Capability</th><th>Source</th><th>Kind</th><th>Status</th><th>Health</th><th>Authorized agents</th><th>Lifecycle</th></tr></thead>
+            <thead><tr><th>Capability</th><th>Source</th><th>Kind</th><th>Status</th><th>OAuth</th><th>Health</th><th>Authorized agents</th><th>Lifecycle</th></tr></thead>
             <tbody>
               {catalog.data.items.map((item, index) => (
                 <tr key={`${item.source}-${item.kind}-${item.id}-${index}`} data-testid={`catalog-${item.source}-${item.kind}`}>
@@ -113,6 +113,10 @@ export default function Tools() {
                   <td><span className="badge badge-mono !text-[10px]">{item.source}</span></td>
                   <td>{String(item.kind)}</td>
                   <td><span className={`badge ${String(item.status) === 'false' ? 'badge-warn' : 'badge-ok'}`}>{String(item.status)}</span></td>
+                  <td data-testid={`catalog-oauth-${item.id}`}>
+                    <span className="badge badge-mono !text-[10px]">{item.oauth?.status}</span>
+                    <div className="text-[10px] text-slate-500">{(item.oauth?.scopes ?? []).join(', ') || '—'}</div>
+                  </td>
                   <td>
                     <button
                       className="btn btn-ghost !py-1 !px-2 !text-[11px]"
@@ -143,6 +147,19 @@ export default function Tools() {
         )}
       </section>
       {healthMessage && <div className={healthMessage.ok ? 'text-sm text-teal-300' : 'text-sm text-rose-400'} data-testid="catalog-health-result">{healthMessage.text}</div>}
+
+      <section className="panel overflow-hidden" data-testid="policy-mapping">
+        <div className="px-4 py-3 border-b border-[#232833] flex items-center justify-between">
+          <span className="label">Policy mapping status</span>
+          <span className="num text-xs text-slate-600">{catalog.data?.grant_mapping_status?.missing_mappings ?? 0} missing</span>
+        </div>
+        {catalog.data?.items?.filter((item) => item.mapping)?.map((item) => (
+          <div key={item.id} className="px-4 py-2 border-t border-[#232833]/60 flex items-center gap-2" data-testid={`mapping-${item.id}`}>
+            <span className="text-sm text-slate-200">{item.name}</span>
+            <span className={`badge ${item.mapping.state === 'mapped' ? 'badge-ok' : item.mapping.state === 'missing_policy' ? 'badge-crit' : 'badge-warn'}`}>{item.mapping.state}</span>
+          </div>
+        ))}
+      </section>
 
       <form className="panel p-5 space-y-3" data-testid="tool-invocation-console" onSubmit={invokeTool}>
         <h2 className="font-semibold">Guarded tool invocation</h2>

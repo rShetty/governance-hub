@@ -1526,7 +1526,8 @@ pub async fn unified_catalog(State(state): State<AppState>, headers: HeaderMap) 
     }
     let hive_token_a = hive_service_token(&state).await;
     let hive_token_b = hive_token_a.clone();
-    let (relay_tools, relay_backends, relay_connectors, hive_skills, hive_mcp) = tokio::join!(
+    let patroclus_token = svc_env(&state, "PATROCLUS_ADMIN_TOKEN");
+    let (relay_tools, relay_backends, relay_connectors, hive_skills, hive_mcp, policies) = tokio::join!(
         backend_get(&state, format!("{}/v1/tools", relay_url()), None),
         backend_get(&state, format!("{}/mcp/backends", relay_url()), None),
         backend_get(&state, format!("{}/v1/connectors", relay_url()), None),
@@ -1540,7 +1541,19 @@ pub async fn unified_catalog(State(state): State<AppState>, headers: HeaderMap) 
             format!("{}/api/mcp-servers", hive_url()),
             hive_token_a.as_deref()
         ),
+        backend_get(
+            &state,
+            format!("{}/v1/admin/policies", patroclus_url()),
+            patroclus_token.as_deref()
+        ),
     );
+
+    let policies = policies
+        .unwrap_or(json!({ "policies": [] }))
+        .get("policies")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
 
     let mut catalog = Vec::new();
     let append = |catalog: &mut Vec<Value>, source: &str, kind: &str, value: Value| {
@@ -1552,6 +1565,10 @@ pub async fn unified_catalog(State(state): State<AppState>, headers: HeaderMap) 
                     "id": item.get("id").or_else(|| item.get("name")).cloned().unwrap_or(json!(null)),
                     "name": item.get("name").cloned().unwrap_or(item.get("id").cloned().unwrap_or(json!("unnamed"))),
                     "status": item.get("status").or_else(|| item.get("enabled")).cloned().unwrap_or(json!("unknown")),
+                    "oauth": {
+                        "status": item.get("auth_status").or_else(|| item.get("oauth_status")).cloned().unwrap_or(json!(if source == "relay" && kind == "connector" { "connected" } else { "not_applicable" })),
+                        "scopes": item.get("scopes").cloned().unwrap_or(json!([])),
+                    },
                     "detail": item,
                 }));
             }
@@ -1608,14 +1625,36 @@ pub async fn unified_catalog(State(state): State<AppState>, headers: HeaderMap) 
             Err(error) => json!({ "__error": error }),
         };
         entry["detail"]["authorized_agents"] = agents;
+        if entry["source"] == "hive" && entry["kind"] == "mcp-server" {
+            let authorized_agents = entry["detail"]["authorized_agents"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default();
+            let has_policy_mapping = policies.iter().any(|policy| {
+                policy
+                    .get("definition")
+                    .and_then(Value::as_str)
+                    .is_some_and(|definition| {
+                        definition
+                            .to_lowercase()
+                            .contains(&entry["id"].as_str().unwrap_or_default().to_lowercase())
+                    })
+            });
+            entry["mapping"] = json!({
+                "authorized_agent_count": authorized_agents.len(),
+                "has_policy_mapping": has_policy_mapping,
+                "state": if authorized_agents.is_empty() { "unassigned" } else if has_policy_mapping { "mapped" } else { "missing_policy" },
+            });
+        }
     }
 
     Json(json!({
         "items": catalog,
         "total": catalog.len(),
         "grant_mapping_status": {
-            "policy_source": "pending",
-            "note": "Authorized agent lists are visible; Patroclus policy equivalence checks are being added.",
+            "source": "patroclus-policies",
+            "checked_items": catalog.iter().filter(|item| item["source"] == "hive" && item["kind"] == "mcp-server").count(),
+            "missing_mappings": catalog.iter().filter(|item| item["mapping"]["state"] == "missing_policy").count(),
         },
     }))
     .into_response()

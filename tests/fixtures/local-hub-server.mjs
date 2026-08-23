@@ -324,7 +324,14 @@ const server = http.createServer(async (request, response) => {
     return send(response, 200, {
       total: 2,
       items: [
-        { source: 'relay', kind: 'connector', id: 'github', name: 'GitHub connector', status: true },
+        {
+          source: 'relay',
+          kind: 'connector',
+          id: 'github',
+          name: 'GitHub connector',
+          status: true,
+          oauth: { status: 'connected', scopes: ['repo', 'read:user'] },
+        },
         {
           source: 'hive',
           kind: 'mcp-server',
@@ -332,6 +339,8 @@ const server = http.createServer(async (request, response) => {
           name: 'Fixture MCP server',
           status: 'active',
           detail: { authorized_agents: [{ id: 'agt_e2e_001' }] },
+          mapping: { authorized_agent_count: 1, has_policy_mapping: true, state: 'mapped' },
+          oauth: { status: 'not_applicable', scopes: [] },
         },
       ],
     })
