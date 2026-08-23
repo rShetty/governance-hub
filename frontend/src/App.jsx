@@ -11,6 +11,7 @@ import Cost from './views/Cost.jsx'
 import Security from './views/Security.jsx'
 import Egress from './views/Egress.jsx'
 import SupplyChain from './views/SupplyChain.jsx'
+import Compliance from './views/Compliance.jsx'
 
 const NAV = [
   { id: 'mission', label: 'Mission Control', icon: 'M3 12h4l3-8 4 16 3-8h4', view: MissionControl },
@@ -22,6 +23,7 @@ const NAV = [
   { id: 'security', label: 'Security', icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', view: Security },
   { id: 'egress', label: 'Egress', icon: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3', view: Egress },
   { id: 'supply-chain', label: 'Supply Chain', icon: 'M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zM16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2', view: SupplyChain },
+  { id: 'compliance', label: 'Compliance', icon: 'M9 12l2 2 4-4M12 3l7 4v5c0 5-3.5 8.5-7 9.9C8.5 20.5 5 17 5 12V7z', view: Compliance },
 ]
 
 const ADMIN_NAV = [

@@ -120,7 +120,7 @@ flow can be exercised end to end.
 - [ ] Aggregate DLP findings.
 - [ ] Aggregate anomaly alerts.
 - [ ] Alert acknowledgment.
-- [ ] SOC 2 / GDPR / EU AI Act / HIPAA report views.
+- [~] SOC 2 / GDPR / EU AI Act / HIPAA report views.
 - [ ] Control coverage and evidence gaps.
 - [ ] Aegis destination policy management.
 - [ ] Geo policy/check visibility.

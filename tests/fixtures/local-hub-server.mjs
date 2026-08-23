@@ -131,6 +131,10 @@ const server = http.createServer(async (request, response) => {
     })
   }
 
+  if (path.match(/^\/api\/svc\/sentiel\/api\/compliance\/(soc2|gdpr|eu_ai_act|hipaa)$/) && request.method === 'GET') {
+    return send(response, 200, { framework: path.split('/').at(-1), controls: [{ id: `${path.split('/').at(-1)}-cc1`, status: 'evidence-complete' }] })
+  }
+
   if (path === '/api/bff/access/simulate' && request.method === 'POST') {
     let raw = ''
     request.on('data', chunk => { raw += chunk })
