@@ -98,8 +98,9 @@ function useSvcRelay() {
 function McpList() {
   const [list, setList] = useState(null)
   useEffect(() => {
-    svcGet('hive', '/api/mcp-servers')
-      .then((d) => setList(Array.isArray(d) ? d : d.servers ?? []))
+    fetch('/api/bff/mcp')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((d) => setList(Array.isArray(d) ? d : d.servers ?? d.items ?? []))
       .catch(() => setList([]))
   }, [])
   if (!Array.isArray(list)) return <div className="p-4 text-sm text-slate-600">Loading…</div>

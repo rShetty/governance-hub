@@ -57,7 +57,7 @@ pub fn router(state: AppState) -> Router {
         .route("/", get(dashboard))
         .route("/assets/{*path}", get(assets::asset))
         .route("/api/services", get(services_status))
-        .route("/logout", post(console::logout))
+        .route("/logout", post(console::logout).get(console::logout_get))
         .route("/api/me", get(console::me))
         .route("/api/console/identities", get(console::identities))
         .route("/api/console/services", get(console::services_list))

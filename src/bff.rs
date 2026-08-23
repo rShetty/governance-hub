@@ -307,7 +307,12 @@ pub async fn mcp_list(State(state): State<AppState>, headers: HeaderMap) -> Resp
     if let Err(r) = require_admin(&state, &headers).await {
         return r;
     }
-    let v = backend_get(&state, format!("{}/api/mcp-servers", hive_url()), None).await;
+    let v = backend_get(
+        &state,
+        format!("{}/api/mcp-servers", hive_url()),
+        svc_env(&state, "HIVE_SERVICE_TOKEN").as_deref(),
+    )
+    .await;
     match v {
         Ok(x) => Json(x).into_response(),
         Err(e) => now_err(StatusCode::BAD_GATEWAY, &format!("hive: {e}")),

@@ -474,3 +474,8 @@ pub async fn require_session(
         err(StatusCode::UNAUTHORIZED, "login required")
     }
 }
+
+/// GET /logout — the UI's sign-out link.
+pub async fn logout_get(state: State<AppState>, headers: HeaderMap) -> Response {
+    logout(state, headers).await
+}
