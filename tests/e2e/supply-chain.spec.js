@@ -5,7 +5,8 @@ const runId = Date.now().toString(36)
 
 test.beforeEach(async ({ page }) => {
   await page.goto(BASE, { waitUntil: 'domcontentloaded' })
-  if (process.env.E2E_PASSWORD) await login(page)
+  await page.goto('/__test__/admin')
+  await page.goto(BASE)
 })
 
 test('Supply Chain renders Hub-owned Forge flows', async ({ page }) => {

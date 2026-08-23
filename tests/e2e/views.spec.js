@@ -7,8 +7,8 @@ import { login } from './helpers.js'
 const BASE = process.env.E2E_BASE_URL || 'https://governance.rajeev.me'
 
 test.beforeEach(async ({ page }) => {
-  if (process.env.E2E_PASSWORD) await login(page)
-  else await page.goto(process.env.E2E_BASE_URL || 'https://governance.rajeev.me')
+  await page.goto('/__test__/admin')
+  await page.goto(process.env.E2E_BASE_URL || 'https://governance.rajeev.me')
 })
 
 test('Mission Control: KPI band populates from live backends', async ({ page }) => {
@@ -40,11 +40,7 @@ test('Access: Patroclus policies listed with engine badges', async ({ page }) =>
   await page.getByRole('button', { name: 'Access' }).click()
   await expect(page.getByRole('heading', { name: 'Access' })).toBeVisible()
   await expect(page.getByText(/Active policies/i)).toBeVisible({ timeout: 15000 })
-  if (!process.env.E2E_PASSWORD) {
-    await expect(page.getByText('allow-github')).toBeVisible({ timeout: 15000 })
-  } else {
-    await expect(page.getByText('default', { exact: true })).toBeVisible({ timeout: 15000 })
-  }
+  await expect(page.getByText('allow-github')).toBeVisible({ timeout: 15000 })
 })
 
 test('Cost & Routing: Miser keys table renders or clean empty state', async ({ page }) => {

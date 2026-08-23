@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test'
-import { login } from './helpers.js'
 test('debug cookie sharing', async ({ page }) => {
-  await login(page)
+  await page.goto('/__test__/admin')
   const me = await page.request.get(`${process.env.E2E_BASE_URL}/api/me`)
   console.log('page.request /api/me:', me.status())
   const cookies = await page.context().cookies()

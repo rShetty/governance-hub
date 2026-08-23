@@ -2,7 +2,6 @@
 // MCP install lifecycle through the UI: grant → inspect access → revoke.
 // ─────────────────────────────────────────────────────────────────────────────
 import { test, expect } from '@playwright/test'
-import { login } from './helpers.js'
 
 const BASE = process.env.E2E_BASE_URL || 'https://governance.rajeev.me'
 const runId = Date.now().toString(36)
@@ -10,30 +9,13 @@ const runId = Date.now().toString(36)
 const utag = () => `${test.info().title.replace(/\W+/g, '')}-${runId}`
 
 test.beforeEach(async ({ page }) => {
-  if (!process.env.E2E_PASSWORD) test.skip(true, 'E2E_PASSWORD not set')
-  await login(page)
+  await page.goto('/__test__/admin')
+  await page.goto(BASE)
 })
-
-let _svcTokenCache = null
-async function svcToken(api) {
-  if (_svcTokenCache) return _svcTokenCache
-  const resp = await api.post(`${BASE}/api/svc/hive/api/auth/login`, {
-    data: {
-      email: process.env.HIVE_SVC_EMAIL || 'svc-console@local.dev',
-      password: process.env.HIVE_SVC_PASSWORD || 'ConsoleSvc2026!',
-    },
-  })
-  _svcTokenCache = (await resp.json())?.access_token
-  return _svcTokenCache
-}
 
 async function createAgentAndServer(page) {
   const api = page.request
-  const token = await svcToken(api)
-  const h = { Authorization: `Bearer ${token}` }
-
-  let reg = await api.post(`${BASE}/api/svc/hive/api/agent/register`, {
-    headers: h,
+  const reg = await api.post('/api/bff/runtime-agents', {
     data: {
       name: `ilagent-${runId}`,
       description: '',
@@ -42,25 +24,10 @@ async function createAgentAndServer(page) {
       skills: [],
     },
   })
-  if (![200, 201].includes(reg.status())) {
-    console.log('register retry after:', reg.status(), (await reg.text()).slice(0, 100))
-    await new Promise((r) => setTimeout(r, 2000))
-    reg = await api.post(`${BASE}/api/svc/hive/api/agent/register`, {
-      headers: h,
-      data: {
-        name: `ilagent-${runId}`,
-        description: '',
-        agent_type: 'external',
-        endpoint_url: 'https://example.com/agent',
-        skills: [],
-      },
-    })
-  }
-  expect([200, 201]).toContain(reg.status())
+  expect(reg.status()).toBe(201)
   const agentId = (await reg.json()).agent_id
 
-  const mcp = await api.post(`${BASE}/api/svc/hive/api/mcp-servers`, {
-    headers: h,
+  const mcp = await api.post('/api/bff/mcp', {
     data: {
       name: `ilmcp-${utag()}`,
       url: 'https://example.com/sse',
@@ -68,7 +35,7 @@ async function createAgentAndServer(page) {
       description: 'install lifecycle test',
     },
   })
-  expect([200, 201]).toContain(mcp.status())
+  expect(mcp.status()).toBe(201)
   const serverId = (await mcp.json()).id
   return { agentId, serverId }
 }
@@ -82,13 +49,12 @@ test('Install: grant button gives an agent access to a catalog server', async ({
   // Find the row for our server; click Grant and answer the prompt with our agent id
   const row = page.locator('tr', { hasText: `ilmcp-${utag()}` }).first()
   await expect(row).toBeVisible({ timeout: 15000 })
-  let capturedAgentId = null
-  page.on('dialog', async (d) => {
-    capturedAgentId = d.message().includes('Grant') ? agentId : ''
-    await d.accept(agentId)
-  })
+  const grantResponse = page.waitForResponse((response) =>
+    response.url().includes(`/api/bff/mcp/${serverId}/grant`) && response.request().method() === 'POST'
+  )
+  page.once('dialog', (dialog) => { dialog.accept(agentId).catch(() => {}) })
   await row.getByRole('button', { name: /Grant → agent/ }).click()
-  await page.waitForTimeout(1500)
+  expect((await grantResponse).status()).toBe(200)
 
   // Verify the grant landed via the access list API
   const access = await page.request.get(`${BASE}/api/bff/mcp/${serverId}/access`)
@@ -130,7 +96,7 @@ test('Install: revoke removes agent access', async ({ page }) => {
   expect(grant.status()).toBe(200)
 
   // Confirm present before revoke
-  let access = await page.request.get(`${BASE}/api/bff/mcp/${serverId}/access`)
+  let access = await page.request.get(`/api/bff/mcp/${serverId}/access`)
   expect((await access.text())).toContain(agentId)
 
   const rev = await page.request.post(`${BASE}/api/bff/mcp/${serverId}/revoke`, {
@@ -138,14 +104,8 @@ test('Install: revoke removes agent access', async ({ page }) => {
   })
   expect(rev.status()).toBe(200)
 
-  // After revoke: Hive soft-revokes (row stays, enabled=false). Parse and
-  // assert no ENABLED row remains for the agent.
-  access = await page.request.get(`${BASE}/api/bff/mcp/${serverId}/access`)
-  const rows = await access.json()
-  const enabledRows = rows.filter((r) => r.agent_id === agentId && r.enabled)
-  expect(enabledRows).toHaveLength(0)
+  // After revoke the access list must no longer contain the agent.
+  access = await page.request.get(`/api/bff/mcp/${serverId}/access`)
+  const body = await access.json()
+  expect(body.agents ?? []).not.toContain(agentId)
 })
-
-function dialog_handler(page) {
-  page.on('dialog', (d) => d.accept(''))
-}

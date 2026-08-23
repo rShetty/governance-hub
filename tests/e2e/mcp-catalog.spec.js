@@ -2,14 +2,12 @@
 // MCP catalog management — list, register via UI form, verify persistence.
 // ─────────────────────────────────────────────────────────────────────────────
 import { test, expect } from '@playwright/test'
-import { login } from './helpers.js'
-
 const BASE = process.env.E2E_BASE_URL || 'https://governance.rajeev.me'
 const runId = Date.now().toString(36)
 
 test.beforeEach(async ({ page }) => {
-  if (!process.env.E2E_PASSWORD) test.skip(true, 'E2E_PASSWORD not set')
-  await login(page)
+  await page.goto('/__test__/admin')
+  await page.goto(BASE)
 })
 
 test('MCP catalog: view renders with catalogue panel and register button', async ({ page }) => {
@@ -61,22 +59,8 @@ test('MCP catalog: form validation blocks empty submission', async ({ page }) =>
 
 test('MCP catalog: association with agent works end-to-end', async ({ page }) => {
   const api = page.request
-  // Login to hive as the service account through console proxy
-  globalThis.__hiveToken = globalThis.__hiveToken || {}
-  const cacheKey = process.env.HIVE_SVC_EMAIL || 'svc-console@local.dev'
-  if (!globalThis.__hiveToken[cacheKey]) {
-    const loginResp = await api.post(`${BASE}/api/svc/hive/api/auth/login`, {
-      data: { email: cacheKey, password: process.env.HIVE_SVC_PASSWORD || 'ConsoleSvc2026!' },
-    })
-    globalThis.__hiveToken[cacheKey] = (await loginResp.json())?.access_token
-  }
-  const token = globalThis.__hiveToken[cacheKey]
-  console.log('DEBUG token len:', (token || '').length)
-  const h = token ? { Authorization: `Bearer ${token}` } : {}
-
   // Create an agent
-  const reg = await api.post(`${BASE}/api/svc/hive/api/agent/register`, {
-    headers: h,
+  const reg = await api.post('/api/bff/runtime-agents', {
     data: {
       name: `assoc-agent-${runId}`,
       description: '',
@@ -90,23 +74,21 @@ test('MCP catalog: association with agent works end-to-end', async ({ page }) =>
 
   // Create an MCP server
   const mcpName = `assoc-mcp-${runId}`
-  const mcp = await api.post(`${BASE}/api/svc/hive/api/mcp-servers`, {
-    headers: h,
+  const mcp = await api.post('/api/bff/mcp', {
     data: { name: mcpName, url: 'https://example.com/sse', transport: 'sse' },
   })
-  expect([200, 201]).toContain(mcp.status())
+  expect(mcp.status()).toBe(201)
   const serverId = (await mcp.json()).id
 
   // Associate
-  const grant = await api.post(`/api/svc/hive/api/mcp-servers/${serverId}/grant`, {
-    headers: h,
+  const grant = await api.post(`/api/bff/mcp/${serverId}/grant`, {
     data: { agent_ids: [agentId] },
   })
-  expect([200, 201]).toContain(grant.status())
+  expect(grant.status()).toBe(200)
 
   // Verify the grant is visible in the API (agent has access)
-  const detail = await api.get(`/api/svc/hive/api/mcp-servers/${serverId}`, { headers: h })
-  expect(detail.status()).toBe(200)
+  const access = await api.get(`/api/bff/mcp/${serverId}/access`)
+  expect((await access.json()).agents).toContain(agentId)
 
   // UI shows the server in the catalogue
   await page.getByRole('button', { name: 'Tools & MCP' }).click()

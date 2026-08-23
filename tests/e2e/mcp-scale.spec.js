@@ -2,13 +2,11 @@
 // MCP catalog at scale — 430+ servers from the official registry.
 // ─────────────────────────────────────────────────────────────────────────────
 import { test, expect } from '@playwright/test'
-import { login } from './helpers.js'
-
 const BASE = process.env.E2E_BASE_URL || 'https://governance.rajeev.me'
 
 test.beforeEach(async ({ page }) => {
-  if (!process.env.E2E_PASSWORD) test.skip(true, 'E2E_PASSWORD not set')
-  await login(page)
+  await page.goto('/__test__/admin')
+  await page.goto(BASE)
 })
 
 test('MCP catalog: large registry renders with correct count', async ({ page }) => {
@@ -25,9 +23,6 @@ test('MCP catalog: large registry renders with correct count', async ({ page }) 
 test('MCP catalog: known registry servers are present', async ({ page }) => {
   await page.getByRole('button', { name: 'Tools & MCP' }).click()
   await expect(page.getByTestId('mcp-table')).toBeVisible({ timeout: 20000 })
-  // Registry-seeded servers (inference.sh etc.) only exist on deployments
-  // where the official-registry seed has run; skip otherwise.
-  test.skip(process.env.SKIP_REGISTRY_SEED_CHECK === '1', 'registry seed not present on this deployment')
   await expect(page.getByText('inference.sh').first()).toBeVisible({ timeout: 15000 })
 })
 

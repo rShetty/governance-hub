@@ -16,6 +16,17 @@ const mcpServers = [
   { id: 'server-e2e', name: 'Fixture MCP server', transport: 'sse', url: 'https://mcp.example.test/sse', description: '', authorized_agents: ['agt_e2e_001'] },
 ]
 const policies = [{ id: 'pol_e2e_001', name: 'allow-github', engine: 'yaml', status: 'active', definition: '- name: allow-github\n  decision: allow' }]
+const services = []
+for (let index = 0; index < 60; index++) {
+  mcpServers.push({
+    id: `registry-${index}`,
+    name: index === 0 ? 'inference.sh' : `registry-server-${index}`,
+    transport: 'sse',
+    url: `https://registry.example.test/${index}/sse`,
+    description: '',
+    authorized_agents: [],
+  })
+}
 
 function send(response, status, body, type = 'application/json') {
   response.writeHead(status, { 'content-type': type })
@@ -28,6 +39,8 @@ const server = http.createServer(async (request, response) => {
 
   if (path === '/api/me') {
     const isMember = String(request.headers.cookie || '').includes('e2e_member=1')
+    const loggedOut = String(request.headers.cookie || '').includes('e2e_logged_out=1')
+    if (loggedOut) return send(response, 401, { error: 'login required' })
     return send(response, 200, {
       sub: 'usr_local_e2e',
       email: 'e2e@governance.test',
@@ -37,7 +50,57 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (path === '/api/services') {
-    return send(response, 200, { services: [], healthy_count: 0 })
+    return send(response, 200, {
+      services,
+      healthy_count: services.length,
+    })
+  }
+
+  if (path === '/api/console/services' && request.method === 'GET') {
+    return send(response, 200, services)
+  }
+
+  if (path === '/api/console/services' && request.method === 'POST') {
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      services.push({ healthy: true, latency_ms: 4, ...body })
+      send(response, 201, { status: 'stored', service: body.id })
+    })
+    return
+  }
+
+  if (path.match(/^\/api\/console\/services\/([^/]+)$/) && request.method === 'DELETE') {
+    const id = decodeURIComponent(path.split('/').at(-1))
+    const index = services.findIndex(item => item.id === id)
+    if (index >= 0) services.splice(index, 1)
+    return send(response, index >= 0 ? 200 : 404, { status: 'removed', service: id })
+  }
+
+  if (path === '/__test__/admin') {
+    response.writeHead(200, { 'set-cookie': ['e2e_member=; Path=/; Max-Age=0', 'e2e_logged_out=; Path=/; Max-Age=0'].join(', ') })
+    response.end(JSON.stringify({ role: 'admin' }))
+    return
+  }
+
+  if (path === '/__test__/logout') {
+    response.writeHead(200, { 'set-cookie': 'e2e_logged_out=1; Path=/; Max-Age=3600' })
+    response.end(JSON.stringify({ loggedOut: true }))
+    return
+  }
+
+  if (path === '/api/bff/agents' && request.method === 'POST') {
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      const agentId = `agent_${crypto.randomUUID().slice(0, 8)}`
+      runtimeAgents.push({ agent_id: agentId, name: body.name, status: 'active', created_at: new Date().toISOString() })
+      identities.push({ id: `agt_${crypto.randomUUID().slice(0, 8)}`, name: body.name, owner: 'e2e@governance.test', scopes: body.scopes ?? [], status: 'active' })
+      send(response, 200, { argus: { agent_id: identities.at(-1).id }, hive: { agent_id: agentId } })
+    })
+    return
   }
 
   if (path === '/api/console/identities') {
