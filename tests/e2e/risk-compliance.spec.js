@@ -13,4 +13,8 @@ test('Risk workflows acknowledge alerts and verify attestations', async ({ page 
   await page.getByTestId('attestation-hash').fill('valid-hash')
   await page.getByTestId('verify-attestation').click()
   await expect(page.getByText('Attestation verified.')).toBeVisible()
+
+  await page.getByTestId('geo-destination').fill('api.example.test')
+  await page.getByTestId('check-geo').click()
+  await expect(page.getByText('Geo verdict for api.example.test: allowed')).toBeVisible()
 })

@@ -123,7 +123,7 @@ flow can be exercised end to end.
 - [~] SOC 2 / GDPR / EU AI Act / HIPAA report views.
 - [ ] Control coverage and evidence gaps.
 - [ ] Aegis destination policy management.
-- [ ] Geo policy/check visibility.
+- [x] Geo policy/check visibility.
 - [ ] Agent attestation/verification flows.
 - [ ] Containment workflow for failed attestations.
 - [ ] Remediation ownership/status.

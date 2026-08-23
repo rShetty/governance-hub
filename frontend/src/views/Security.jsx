@@ -31,6 +31,21 @@ export default function Security() {
     setMessage({ ok: response.ok && body.verified === true, text: response.ok ? (body.verified ? 'Attestation verified.' : 'Attestation failed.') : body.error })
   }
 
+  const checkGeo = async (event) => {
+    event.preventDefault()
+    const destination = event.currentTarget.elements.destination.value
+    const response = await fetch('/api/svc/aegis/api/geo/check', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ destination }),
+    })
+    const body = await response.json().catch(() => ({}))
+    setMessage({
+      ok: response.ok && body.allowed === true,
+      text: response.ok ? `Geo verdict for ${destination}: ${body.allowed ? 'allowed' : 'blocked'}` : body.error || `status ${response.status}`,
+    })
+  }
+
   const stats = data.stats ?? {}
   const dlp = Array.isArray(data.dlp) ? data.dlp : []
   const soc2 = data.soc2 ?? {}
@@ -69,6 +84,13 @@ export default function Security() {
             <input data-testid="attestation-hash" placeholder="process hash" />
             <button data-testid="verify-attestation" className="btn btn-primary" onClick={verifyAttestation}>Verify</button>
           </div>
+        </Panel>
+
+        <Panel title="Data residency check" subtitle="Validate a destination through Aegis geo policy">
+          <form className="space-y-2" onSubmit={checkGeo}>
+            <input data-testid="geo-destination" name="destination" required placeholder="api.example.test" />
+            <button className="btn btn-primary" data-testid="check-geo">Check</button>
+          </form>
         </Panel>
 
         {message && <div className={`text-sm ${message.ok ? 'text-emerald-400' : 'text-rose-400'}`}>{message.text}</div>}

@@ -121,6 +121,16 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
+  if (path === '/api/svc/aegis/api/geo/check' && request.method === 'POST') {
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      send(response, 200, { allowed: !body.destination.includes('.blocked'), destination: body.destination })
+    })
+    return
+  }
+
   if (path === '/api/bff/catalog') {
     return send(response, 200, {
       total: 2,
