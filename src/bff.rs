@@ -905,7 +905,7 @@ fn default_limit() -> u32 {
 
 fn activity_matches(item: &Value, q: &PageQuery) -> bool {
     let contains = |field: &str, filter: &Option<String>| {
-        filter.as_deref().map_or(true, |wanted| {
+        filter.as_deref().is_none_or(|wanted| {
             item.get(field)
                 .map(Value::to_string)
                 .unwrap_or_default()
