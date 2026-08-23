@@ -87,6 +87,10 @@ pub fn router(state: AppState) -> Router {
             "/api/bff/access/sessions/{session_id}/kill",
             post(bff::session_kill),
         )
+        .route(
+            "/api/bff/agents/{agent_id}/emergency-kill",
+            post(bff::agent_emergency_kill),
+        )
         .route("/api/bff/mcp", get(bff::mcp_list).post(bff::mcp_create))
         .route("/api/bff/mcp/{server_id}/grant", post(bff::mcp_grant))
         .route("/api/bff/mcp/{server_id}/revoke", post(bff::mcp_revoke))

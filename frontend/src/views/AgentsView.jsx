@@ -46,6 +46,26 @@ export default function AgentsView() {
     }
   }
 
+  const emergencyKill = async () => {
+    const patroclusId = window.prompt('Patroclus agent UUID:')
+    if (!patroclusId?.trim()) return
+    const reason = window.prompt('Required emergency reason:')
+    if (!reason?.trim()) return
+    setActionError('')
+    try {
+      const response = await fetch(`/api/bff/agents/${encodeURIComponent(patroclusId)}/emergency-kill`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.error || `status ${response.status}`)
+      setActionError(`Emergency stop applied to ${patroclusId} by ${body.operator}.`)
+    } catch (error) {
+      setActionError(String(error.message || error))
+    }
+  }
+
   const runtimeRaw = Array.isArray(hive.data)
     ? hive.data
     : (hive.data?.items ?? hive.data?.agents ?? [])
@@ -62,6 +82,7 @@ export default function AgentsView() {
           <p className="text-[13px] text-slate-500 mt-0.5">
             Runtime actors (Hive) and their ecosystem identities (Argus) — one roster.
           </p>
+          <button className="btn btn-ghost mt-2" onClick={emergencyKill}>Emergency stop</button>
         </div>
       </div>
 
@@ -135,7 +156,7 @@ export default function AgentsView() {
           )}
         </section>
       </div>
-      {actionError && <div className="panel p-4 text-sm text-rose-400">{actionError}</div>}
+      {actionError && <div className="panel p-4 text-sm text-slate-200" data-testid="identity-action-result">{actionError}</div>}
     </div>
   )
 }

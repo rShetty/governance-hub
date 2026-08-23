@@ -427,6 +427,50 @@ pub async fn session_kill(
     }
 }
 
+#[derive(Deserialize)]
+pub struct EmergencyKillRequest {
+    #[serde(default)]
+    pub reason: String,
+}
+
+/// POST /api/bff/agents/{id}/emergency-kill — invoke Patroclus emergency stop.
+pub async fn agent_emergency_kill(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(agent_id): Path<String>,
+    Json(body): Json<EmergencyKillRequest>,
+) -> Response {
+    let (user, token) = match patroclus_admin(&state, &headers).await {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    if body.reason.trim().is_empty() {
+        return now_err(StatusCode::BAD_REQUEST, "reason required");
+    }
+    let payload = json!({
+        "reason": body.reason,
+        "operator": user.email,
+        "initiated_by": "governance-hub",
+    });
+    match backend_post(
+        &state,
+        format!("{}/v1/admin/agents/{agent_id}/kill", patroclus_url()),
+        token.as_deref(),
+        payload,
+    )
+    .await
+    {
+        Ok(result) => Json(json!({
+            "agent_id": agent_id,
+            "status": "killed",
+            "operator": user.email,
+            "result": result,
+        }))
+        .into_response(),
+        Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("patroclus: {error}")),
+    }
+}
+
 mod argus {
     use super::*;
 

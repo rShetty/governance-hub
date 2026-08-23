@@ -72,6 +72,13 @@ const server = http.createServer(async (request, response) => {
     return send(response, 200, { result: { killed: true } })
   }
 
+  if (path === '/api/bff/agents/00000000-0000-0000-0000-000000000009/emergency-kill' && request.method === 'POST') {
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => send(response, 200, JSON.parse(raw || '{}')))
+    return
+  }
+
   if (path === '/api/svc/forge/api/packages' && request.method === 'GET') {
     return send(response, 200, packages)
   }
