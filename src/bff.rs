@@ -278,6 +278,88 @@ pub async fn agents_create(
     .into_response()
 }
 
+#[derive(Deserialize)]
+pub struct IdentityActionRequest {
+    pub action: String,
+    pub reason: Option<String>,
+}
+
+/// POST /api/bff/identities/{id}/action — lifecycle control for machine identities.
+pub async fn identity_action(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(identity_id): Path<String>,
+    Json(body): Json<IdentityActionRequest>,
+) -> Response {
+    let user = match require_admin(&state, &headers).await {
+        Ok(user) => user,
+        Err(response) => return response,
+    };
+    let requested_status = match body.action.as_str() {
+        "revoke" => "revoked",
+        "restore" => "active",
+        _ => return now_err(StatusCode::BAD_REQUEST, "action must be revoke or restore"),
+    };
+    if body
+        .reason
+        .as_deref()
+        .map(str::trim)
+        .unwrap_or_default()
+        .is_empty()
+    {
+        return now_err(StatusCode::BAD_REQUEST, "reason required");
+    }
+
+    let issuer = state.config.oidc_issuer.clone().unwrap_or_default();
+    let creds = format!(
+        "{}:{}",
+        state.config.oidc_client_id.as_deref().unwrap_or(""),
+        state.config.oidc_client_secret.as_deref().unwrap_or("")
+    );
+    use base64::Engine as _;
+    let authorization = format!(
+        "Basic {}",
+        base64::engine::general_purpose::STANDARD.encode(creds)
+    );
+    let mut request = state
+        .client
+        .post(format!("{issuer}/api/admin/agents/{identity_id}/revoke"))
+        .header(header::AUTHORIZATION, authorization)
+        .timeout(std::time::Duration::from_secs(10));
+    if requested_status == "active" {
+        request = request.json(&json!({ "status": requested_status }));
+    } else {
+        request = request.json(&json!({
+            "status": requested_status,
+            "reason": body.reason.unwrap_or_default(),
+            "operator": user.email,
+        }));
+    }
+
+    match request.send().await {
+        Ok(response) => {
+            let status =
+                StatusCode::from_u16(response.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+            let payload: Value = response.json().await.unwrap_or(Value::Null);
+            if !status.is_success() {
+                return (status, Json(payload)).into_response();
+            }
+            Json(json!({
+                "identity_id": identity_id,
+                "status": requested_status,
+                "operator": user.email,
+                "backend": "argus",
+                "result": payload,
+            }))
+            .into_response()
+        }
+        Err(error) => now_err(
+            StatusCode::BAD_GATEWAY,
+            &format!("argus unreachable: {error}"),
+        ),
+    }
+}
+
 mod argus {
     use super::*;
 

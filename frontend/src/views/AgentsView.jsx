@@ -9,6 +9,7 @@ import { svcGet, identities, fmtInt } from '../api.js'
 export default function AgentsView() {
   const [hive, setHive] = useState({ data: null, err: '' })
   const [dir, setDir] = useState({ data: null, err: '' })
+  const [actionError, setActionError] = useState('')
 
   useEffect(() => {
     svcGet('hive', '/api/agents?limit=100&order=recent')
@@ -18,6 +19,32 @@ export default function AgentsView() {
       .then((d) => setDir({ data: d, err: '' }))
       .catch((e) => setDir({ data: null, err: String(e.message || e) }))
   }, [])
+
+  const runIdentityAction = async (identityId, action) => {
+    const reason = window.prompt(`${action} identity ${identityId}. Required reason:`)
+    if (!reason?.trim()) return
+    setActionError('')
+    try {
+      const response = await fetch(`/api/bff/identities/${encodeURIComponent(identityId)}/action`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action, reason }),
+      })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.error || `status ${response.status}`)
+      setDir((current) => ({
+        ...current,
+        data: {
+          ...current.data,
+          agents: current.data.agents.map((agent) => (
+            agent.id === identityId ? { ...agent, status: body.status } : agent
+          )),
+        },
+      }))
+    } catch (error) {
+      setActionError(String(error.message || error))
+    }
+  }
 
   const runtimeRaw = Array.isArray(hive.data)
     ? hive.data
@@ -78,7 +105,7 @@ export default function AgentsView() {
               <thead><tr><th>Identity</th><th>Scopes</th><th>Kill switch</th></tr></thead>
               <tbody>
                 {agents.map((a) => (
-                  <tr key={a.id}>
+                  <tr key={a.id} data-testid={`identity-${a.id}`}>
                     <td className="text-slate-200 font-mono text-xs">{a.name}<div className="text-slate-600 text-[10px]">{a.owner}</div></td>
                     <td>
                       <div className="flex flex-wrap gap-1">
@@ -88,10 +115,17 @@ export default function AgentsView() {
                     <td>{a.status === 'active'
                       ? <span className="badge badge-ok">armed</span>
                       : <span className="badge badge-crit">revoked</span>}</td>
+                    <td>
+                      {a.status === 'active' ? (
+                        <button data-testid={`identity-revoke-${a.id}`} className="btn btn-ghost !py-1 !px-2 !text-[11px]" onClick={() => runIdentityAction(a.id, 'revoke')}>Revoke</button>
+                      ) : (
+                        <button data-testid={`identity-restore-${a.id}`} className="btn btn-ghost !py-1 !px-2 !text-[11px]" onClick={() => runIdentityAction(a.id, 'restore')}>Restore</button>
+                      )}
+                    </td>
                   </tr>
                 ))}
                 {!agents.length && (
-                  <tr><td colSpan="3" className="text-center py-8 text-slate-600">
+                  <tr><td colSpan="4" className="text-center py-8 text-slate-600">
                     No agent identities yet.<br />
                     <span className="text-slate-700 text-xs">Create via Argus POST /api/agents — P2 adds this to this view.</span>
                   </td></tr>
@@ -101,6 +135,7 @@ export default function AgentsView() {
           )}
         </section>
       </div>
+      {actionError && <div className="panel p-4 text-sm text-rose-400">{actionError}</div>}
     </div>
   )
 }

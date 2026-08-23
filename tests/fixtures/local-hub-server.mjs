@@ -5,6 +5,9 @@ import { extname, join, normalize } from 'node:path'
 const root = new URL('../../frontend/dist', import.meta.url).pathname
 const packages = []
 const publishers = []
+const identities = [
+  { id: 'agt_e2e_001', name: 'Fixture Agent', owner: 'e2e@governance.test', scopes: ['relay:call'], status: 'active' },
+]
 
 function send(response, status, body, type = 'application/json') {
   response.writeHead(status, { 'content-type': type })
@@ -26,6 +29,26 @@ const server = http.createServer(async (request, response) => {
 
   if (path === '/api/services') {
     return send(response, 200, { services: [], healthy_count: 0 })
+  }
+
+  if (path === '/api/console/identities') {
+    return send(response, 200, { humans: [], agents: identities })
+  }
+
+  if (path.match(/^\/api\/bff\/identities\/([^/]+)\/action$/) && request.method === 'POST') {
+    const identityId = decodeURIComponent(path.split('/')[4])
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      const identity = identities.find(item => item.id === identityId)
+      if (!identity) return send(response, 404, { error: 'identity not found' })
+      if (!['revoke', 'restore'].includes(body.action)) return send(response, 400, { error: 'invalid action' })
+      if (!body.reason?.trim()) return send(response, 400, { error: 'reason required' })
+      identity.status = body.action === 'revoke' ? 'revoked' : 'active'
+      send(response, 200, { identity_id: identityId, status: identity.status, operator: 'e2e@governance.test', backend: 'argus' })
+    })
+    return
   }
 
   if (path === '/api/svc/forge/api/packages' && request.method === 'GET') {
