@@ -107,6 +107,10 @@ const server = http.createServer(async (request, response) => {
     return send(response, 200, [{ id: 'alert_e2e_001', title: 'Spending spike detected' }])
   }
 
+  if (path === '/api/svc/sentiel/api/integrity') {
+    return send(response, 200, { intact: true, total_events: 42 })
+  }
+
   if (path === '/api/svc/sentiel/api/alerts/alert_e2e_001/acknowledge' && request.method === 'POST') {
     return send(response, 200, { acknowledged: 'alert_e2e_001' })
   }

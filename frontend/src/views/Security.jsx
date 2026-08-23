@@ -8,6 +8,7 @@ export default function Security() {
     ['dlp', '/api/dlp/violations?limit=20'],
     ['soc2', '/api/compliance/soc2'],
     ['alerts', '/api/alerts'],
+    ['integrity', '/api/integrity'],
   ])
   const [message, setMessage] = useState(null)
   const [acknowledged, setAcknowledged] = useState([])
@@ -67,6 +68,17 @@ export default function Security() {
           <pre className="text-[11px] font-mono text-slate-300 overflow-x-auto whitespace-pre-wrap">
             {JSON.stringify(soc2.summary ?? soc2, null, 2)}
           </pre>
+        </Panel>
+
+        <Panel title="Audit integrity" subtitle="Sentiel event hash-chain status">
+          <div className="flex items-center gap-3" data-testid="audit-integrity">
+            {data.integrity?.intact ? (
+              <span className="badge badge-ok">intact</span>
+            ) : (
+              <span className="badge badge-crit">broken or unconfigured</span>
+            )}
+            <span className="text-sm text-slate-400">{fmtInt(data.integrity?.total_events)} events</span>
+          </div>
         </Panel>
 
         <Panel title="Open anomaly alerts" subtitle="Acknowledge after investigation">

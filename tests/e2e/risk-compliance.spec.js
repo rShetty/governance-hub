@@ -17,4 +17,7 @@ test('Risk workflows acknowledge alerts and verify attestations', async ({ page 
   await page.getByTestId('geo-destination').fill('api.example.test')
   await page.getByTestId('check-geo').click()
   await expect(page.getByText('Geo verdict for api.example.test: allowed')).toBeVisible()
+
+  await expect(page.getByTestId('audit-integrity')).toContainText('intact')
+  await expect(page.getByTestId('audit-integrity')).toContainText('42 events')
 })
