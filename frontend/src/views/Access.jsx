@@ -3,12 +3,45 @@ import { useEffect, useState } from 'react'
 export default function Access() {
   const [policies, setPolicies] = useState(null)
   const [err, setErr] = useState('')
+  const [approvals, setApprovals] = useState([])
+  const [sessions, setSessions] = useState([])
+  const [message, setMessage] = useState(null)
+
   useEffect(() => {
     fetch('/api/bff/policies')
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`status ${r.status}`))))
       .then((d) => setPolicies(d.policies ?? d))
       .catch((e) => setErr(String(e.message || e)))
+
+    fetch('/api/svc/patroclus/v1/principal/approvals')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`status ${r.status}`))))
+      .then(setApprovals)
+      .catch(() => setApprovals([]))
+    fetch('/api/svc/patroclus/v1/sessions')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`status ${r.status}`))))
+      .then((d) => setSessions(Array.isArray(d) ? d : d.sessions ?? []))
+      .catch(() => setSessions([]))
   }, [])
+
+  const resolveApproval = async (approvalId) => {
+    const approverId = window.prompt('Patroclus principal UUID:')
+    if (!approverId) return
+    const response = await fetch(`/api/bff/access/approvals/${approvalId}/resolve`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ approver_id: approverId, reason: 'Approved from Governance Hub' }),
+    })
+    const body = await response.json().catch(() => ({}))
+    setMessage({ ok: response.ok, text: response.ok ? 'Approval resolved.' : body.error })
+    if (response.ok) setApprovals((current) => current.filter((item) => item.id !== approvalId))
+  }
+
+  const killSession = async (sessionId) => {
+    const response = await fetch(`/api/bff/access/sessions/${sessionId}/kill`, { method: 'POST' })
+    const body = await response.json().catch(() => ({}))
+    setMessage({ ok: response.ok, text: response.ok ? 'Session killed.' : body.error })
+    if (response.ok) setSessions((current) => current.filter((item) => (item.id ?? item.session_id) !== sessionId))
+  }
 
   const list = Array.isArray(policies)
     ? policies
@@ -25,6 +58,27 @@ export default function Access() {
         </p>
       </div>
       {err && <div className="panel p-4 text-[13px] text-amber-400/90">Patroclus unavailable — {err}</div>}
+      <section className="panel overflow-hidden" data-testid="pending-approvals">
+        <div className="px-4 py-3 border-b border-[#232833]"><span className="label">Pending approvals</span></div>
+        {approvals.length ? approvals.map((item) => (
+          <div key={item.id} className="px-4 py-2 border-t border-[#232833]/60 flex items-center gap-2">
+            <span className="text-xs font-mono text-slate-400">{item.id}</span>
+            <button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`approve-${item.id}`} onClick={() => resolveApproval(item.id)}>Approve</button>
+          </div>
+        )) : <div className="p-6 text-sm text-slate-600">No pending approvals.</div>}
+      </section>
+
+      <section className="panel overflow-hidden" data-testid="live-sessions">
+        <div className="px-4 py-3 border-b border-[#232833]"><span className="label">Live sessions</span></div>
+        {sessions.length ? sessions.map((session) => (
+          <div key={session.id ?? session.session_id} className="px-4 py-2 border-t border-[#232833]/60 flex items-center gap-2">
+            <span className="text-xs font-mono text-slate-400">{session.id ?? session.session_id}</span>
+            <button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`kill-${session.id ?? session.session_id}`} onClick={() => killSession(session.id ?? session.session_id)}>Kill</button>
+          </div>
+        )) : <div className="p-6 text-sm text-slate-600" data-testid="no-sessions">No live sessions.</div>}
+      </section>
+
+      {message && <div className={message.ok ? 'text-sm text-teal-300' : 'text-sm text-rose-400'}>{message.text}</div>}
       <section className="panel overflow-hidden">
         <div className="px-4 py-3 border-b border-[#232833] flex items-center justify-between">
           <span className="label">Active policies</span>

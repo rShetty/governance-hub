@@ -8,6 +8,8 @@ const publishers = []
 const identities = [
   { id: 'agt_e2e_001', name: 'Fixture Agent', owner: 'e2e@governance.test', scopes: ['relay:call'], status: 'active' },
 ]
+const approvals = [{ id: 'apr_e2e_001', agent_id: 'agt_e2e_001', action: 'deploy' }]
+const sessions = [{ id: 'ses_e2e_001', agent_id: 'agt_e2e_001', active: true }]
 
 function send(response, status, body, type = 'application/json') {
   response.writeHead(status, { 'content-type': type })
@@ -49,6 +51,24 @@ const server = http.createServer(async (request, response) => {
       send(response, 200, { identity_id: identityId, status: identity.status, operator: 'e2e@governance.test', backend: 'argus' })
     })
     return
+  }
+
+  if (path === '/api/svc/patroclus/v1/principal/approvals') {
+    return send(response, 200, approvals)
+  }
+
+  if (path === '/api/svc/patroclus/v1/sessions') {
+    return send(response, 200, { sessions })
+  }
+
+  if (path === '/api/bff/access/approvals/apr_e2e_001/resolve' && request.method === 'POST') {
+    approvals.length = 0
+    return send(response, 200, { decision: 'approved', operator: 'e2e@governance.test' })
+  }
+
+  if (path === '/api/bff/access/sessions/ses_e2e_001/kill' && request.method === 'POST') {
+    sessions.length = 0
+    return send(response, 200, { result: { killed: true } })
   }
 
   if (path === '/api/svc/forge/api/packages' && request.method === 'GET') {

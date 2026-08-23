@@ -79,6 +79,14 @@ pub fn router(state: AppState) -> Router {
             "/api/bff/identities/{identity_id}/action",
             post(bff::identity_action),
         )
+        .route(
+            "/api/bff/access/approvals/{approval_id}/resolve",
+            post(bff::approval_resolve),
+        )
+        .route(
+            "/api/bff/access/sessions/{session_id}/kill",
+            post(bff::session_kill),
+        )
         .route("/api/bff/mcp", get(bff::mcp_list).post(bff::mcp_create))
         .route("/api/bff/mcp/{server_id}/grant", post(bff::mcp_grant))
         .route("/api/bff/mcp/{server_id}/revoke", post(bff::mcp_revoke))

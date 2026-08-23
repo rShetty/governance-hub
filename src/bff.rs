@@ -360,6 +360,73 @@ pub async fn identity_action(
     }
 }
 
+async fn patroclus_admin(
+    state: &AppState,
+    headers: &HeaderMap,
+) -> Result<(auth::HubUser, Option<String>), Response> {
+    let user = require_admin(state, headers).await?;
+    Ok((user, svc_env(state, "PATROCLUS_ADMIN_TOKEN")))
+}
+
+#[derive(Deserialize)]
+pub struct AccessActionRequest {
+    pub approver_id: String,
+    #[serde(default)]
+    pub reason: String,
+}
+
+/// POST /api/bff/access/approvals/{id}/resolve — approve a pending request.
+pub async fn approval_resolve(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(approval_id): Path<String>,
+    Json(body): Json<AccessActionRequest>,
+) -> Response {
+    let (user, token) = match patroclus_admin(&state, &headers).await {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    if body.approver_id.trim().is_empty() {
+        return now_err(StatusCode::BAD_REQUEST, "approver_id required");
+    }
+    let url = format!(
+        "{}/v1/principal/approvals/{}/approve",
+        patroclus_url(),
+        approval_id
+    );
+    let payload = json!({
+        "approver_id": body.approver_id,
+        "reason": body.reason,
+    });
+    match backend_post(&state, url, token.as_deref(), payload).await {
+        Ok(result) => Json(json!({
+            "approval_id": approval_id,
+            "decision": "approved",
+            "operator": user.email,
+            "result": result,
+        }))
+        .into_response(),
+        Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("patroclus: {error}")),
+    }
+}
+
+/// POST /api/bff/access/sessions/{id}/kill — terminate a Patroclus session.
+pub async fn session_kill(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(session_id): Path<String>,
+) -> Response {
+    let (_, token) = match patroclus_admin(&state, &headers).await {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    let url = format!("{}/v1/sessions/{session_id}/kill", patroclus_url());
+    match backend_post(&state, url, token.as_deref(), json!({})).await {
+        Ok(result) => Json(json!({ "session_id": session_id, "result": result })).into_response(),
+        Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("patroclus: {error}")),
+    }
+}
+
 mod argus {
     use super::*;
 
