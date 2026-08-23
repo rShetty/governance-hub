@@ -471,6 +471,49 @@ pub async fn agent_emergency_kill(
     }
 }
 
+#[derive(Deserialize)]
+pub struct TokenRevokeRequest {
+    #[serde(default)]
+    pub reason: String,
+}
+
+/// POST /api/bff/access/tokens/{jti}/revoke — revoke a Patroclus token.
+pub async fn token_revoke(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(token_id): Path<String>,
+    Json(body): Json<TokenRevokeRequest>,
+) -> Response {
+    let (user, token) = match patroclus_admin(&state, &headers).await {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    if body.reason.trim().is_empty() {
+        return now_err(StatusCode::BAD_REQUEST, "reason required");
+    }
+    let mut request = state
+        .client
+        .post(format!(
+            "{}/v1/admin/tokens/{}/revoke",
+            patroclus_url(),
+            token_id
+        ))
+        .header("x-reason", body.reason)
+        .header("x-operator", user.email)
+        .timeout(std::time::Duration::from_secs(10));
+    if let Some(service_token) = token {
+        request = request.bearer_auth(service_token);
+    }
+    match request.send().await {
+        Ok(response) => {
+            let status =
+                StatusCode::from_u16(response.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+            (status, Json(response.json().await.unwrap_or(Value::Null))).into_response()
+        }
+        Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("patroclus: {error}")),
+    }
+}
+
 mod argus {
     use super::*;
 

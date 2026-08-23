@@ -43,6 +43,20 @@ export default function Access() {
     if (response.ok) setSessions((current) => current.filter((item) => (item.id ?? item.session_id) !== sessionId))
   }
 
+  const revokeToken = async () => {
+    const tokenId = window.prompt('Token JTI:')
+    if (!tokenId?.trim()) return
+    const reason = window.prompt('Required revocation reason:')
+    if (!reason?.trim()) return
+    const response = await fetch(`/api/bff/access/tokens/${encodeURIComponent(tokenId)}/revoke`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    })
+    const body = await response.json().catch(() => ({}))
+    setMessage({ ok: response.ok, text: response.ok ? `Token ${tokenId} revoked.` : body.error })
+  }
+
   const list = Array.isArray(policies)
     ? policies
     : Array.isArray(policies?.policies)
@@ -76,6 +90,12 @@ export default function Access() {
             <button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`kill-${session.id ?? session.session_id}`} onClick={() => killSession(session.id ?? session.session_id)}>Kill</button>
           </div>
         )) : <div className="p-6 text-sm text-slate-600" data-testid="no-sessions">No live sessions.</div>}
+      </section>
+
+      <section className="panel p-5" data-testid="token-revocation">
+        <h2 className="font-semibold">Revoke token</h2>
+        <p className="text-xs text-slate-500 mt-1">Immediately rejects the supplied JTI at Patroclus.</p>
+        <button className="btn btn-primary mt-3" onClick={revokeToken}>Select token</button>
       </section>
 
       {message && <div className={message.ok ? 'text-sm text-teal-300' : 'text-sm text-rose-400'}>{message.text}</div>}

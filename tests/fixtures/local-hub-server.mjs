@@ -79,6 +79,10 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
+  if (path === '/api/bff/access/tokens/token-e2e-jti/revoke' && request.method === 'POST') {
+    return send(response, 200, { revoked: 'token-e2e-jti' })
+  }
+
   if (path === '/api/svc/forge/api/packages' && request.method === 'GET') {
     return send(response, 200, packages)
   }
