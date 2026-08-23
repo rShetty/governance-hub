@@ -4,7 +4,7 @@
 //! clients never hold service credentials. Path traversal is rejected.
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{header, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
@@ -94,6 +94,7 @@ async fn forward(
     method: axum::http::Method,
     body: Option<axum::body::Bytes>,
     caller_auth: Option<String>,
+    query: Option<String>,
 ) -> Result<axum::response::Response, (StatusCode, axum::Json<serde_json::Value>)> {
     validate(&service, &rest)?;
 
@@ -104,11 +105,15 @@ async fn forward(
         ));
     };
 
-    let url = format!(
+    let mut url = format!(
         "{}/{}",
         cfg.url.trim_end_matches('/'),
         rest.trim_start_matches('/')
     );
+    if let Some(q) = query {
+        url.push('?');
+        url.push_str(&q);
+    }
 
     let mut req = match method {
         axum::http::Method::POST => state.client.post(&url),
@@ -162,17 +167,25 @@ pub async fn proxy_get(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
     path: Path<(String, String)>,
+    Query(query): Query<Vec<(String, String)>>,
 ) -> impl IntoResponse {
     let caller_auth = headers
         .get("authorization")
         .and_then(|v| v.to_str().ok())
         .map(String::from);
+    let qs = query
+        .iter()
+        .map(|(k, v)| format!("{k}={}", urlencoding::encode(v)))
+        .collect::<Vec<_>>()
+        .join("&");
+    let qs = (!qs.is_empty()).then_some(qs);
     forward(
         State(state),
         path,
         axum::http::Method::GET,
         None,
         caller_auth,
+        qs,
     )
     .await
 }
@@ -182,6 +195,7 @@ pub async fn proxy_post(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
     path: Path<(String, String)>,
+    Query(query): Query<Vec<(String, String)>>,
     body: axum::body::Bytes,
 ) -> impl IntoResponse {
     let body = if body.is_empty() { None } else { Some(body) };
@@ -189,12 +203,19 @@ pub async fn proxy_post(
         .get("authorization")
         .and_then(|v| v.to_str().ok())
         .map(String::from);
+    let qs = query
+        .iter()
+        .map(|(k, v)| format!("{k}={}", urlencoding::encode(v)))
+        .collect::<Vec<_>>()
+        .join("&");
+    let qs = (!qs.is_empty()).then_some(qs);
     forward(
         State(state),
         path,
         axum::http::Method::POST,
         body,
         caller_auth,
+        qs,
     )
     .await
 }

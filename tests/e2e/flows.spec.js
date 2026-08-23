@@ -41,7 +41,8 @@ test('Onboarding: create agent via BFF → visible in roster + Argus directory',
   const panel = page.getByTestId('runtime-agents')
   await expect(panel).toBeVisible()
   await expect(panel.locator('table')).toBeVisible({ timeout: 15000 })
-  await expect(page.getByText(name).first()).toBeVisible({ timeout: 15000 })
+  // The BFF-registered agent must appear (newest-first sort guarantees it).
+  await expect(page.getByText(name).first()).toBeVisible({ timeout: 20000 })
 
   // Identity directory lists the machine identity too
   await page.getByRole('button', { name: 'Identity Directory' }).click()

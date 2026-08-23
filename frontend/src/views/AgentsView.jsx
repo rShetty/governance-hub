@@ -11,7 +11,7 @@ export default function AgentsView() {
   const [dir, setDir] = useState({ data: null, err: '' })
 
   useEffect(() => {
-    svcGet('hive', '/api/agents')
+    svcGet('hive', '/api/agents?limit=100&order=recent')
       .then((d) => setHive({ data: d, err: '' }))
       .catch((e) => setHive({ data: null, err: String(e.message || e) }))
     identities()
