@@ -119,7 +119,7 @@ export default function SupplyChain() {
           <input data-testid="package-version" required placeholder="1.0.0" value={packageForm.version} onChange={(event) => setPackageForm({ ...packageForm, version: event.target.value })} />
           <input data-testid="package-publisher" required placeholder="trusted-org" value={packageForm.publisher} onChange={(event) => setPackageForm({ ...packageForm, publisher: event.target.value })} />
           <input data-testid="package-path" placeholder="/path/to/package.tar.gz" value={packageForm.file_path} onChange={(event) => setPackageForm({ ...packageForm, file_path: event.target.value })} />
-          <button className="btn btn-primary" disabled={busy}>Register</button>
+          <button data-testid="package-submit" className="btn btn-primary" disabled={busy}>Register</button>
         </form>
 
         <form
@@ -133,7 +133,7 @@ export default function SupplyChain() {
           <h2 className="font-semibold">Trust publisher</h2>
           <input data-testid="publisher-name" required placeholder="trusted-org" value={publisherForm.publisher} onChange={(event) => setPublisherForm({ ...publisherForm, publisher: event.target.value })} />
           <textarea data-testid="publisher-key" required placeholder="Public signing key" value={publisherForm.public_key} onChange={(event) => setPublisherForm({ ...publisherForm, public_key: event.target.value })} />
-          <button className="btn btn-primary" disabled={busy}>Trust publisher</button>
+          <button data-testid="publisher-submit" className="btn btn-primary" disabled={busy}>Trust publisher</button>
         </form>
       </div>
 

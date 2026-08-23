@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "test:e2e:local": "playwright test --config=playwright.local.config.js",
     "dev": "vite",
     "build": "vite build"
   },

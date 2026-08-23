@@ -1,12 +1,11 @@
 import { test, expect } from '@playwright/test'
 import { login } from './helpers.js'
-
 const BASE = process.env.E2E_BASE_URL || 'https://governance.rajeev.me'
 const runId = Date.now().toString(36)
 
 test.beforeEach(async ({ page }) => {
-  if (!process.env.E2E_PASSWORD) test.skip(true, 'E2E_PASSWORD not set')
-  await login(page)
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  if (process.env.E2E_PASSWORD) await login(page)
 })
 
 test('Supply Chain renders Hub-owned Forge flows', async ({ page }) => {
@@ -25,10 +24,7 @@ test('Supply Chain registers a package through the UI', async ({ page }) => {
   await page.getByTestId('package-name').fill(name)
   await page.getByTestId('package-version').fill('1.0.0')
   await page.getByTestId('package-publisher').fill(`playwright-${runId}`)
-  await page.locator('[data-testid="package-form"] button[type="submit"]').click()
+  await page.getByTestId('package-submit').click()
 
-  if (await page.getByTestId('supply-empty').isVisible().catch(() => false)) {
-    test.skip(true, 'Forge is not available on this deployment')
-  }
   await expect(page.getByText(name).first()).toBeVisible({ timeout: 15000 })
 })
