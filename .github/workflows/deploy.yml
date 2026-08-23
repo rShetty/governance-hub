@@ -66,7 +66,13 @@ jobs:
           cp deploy/governance-hub.service bundle/
           tar -czf governance-hub-bundle.tar.gz -C bundle .
 
-      - name: Ship bundle to VPS
+      - name: Connect to tailnet
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+
+      - name: Ship bundle to VPS (with retries)
         uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -74,10 +80,14 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           source: governance-hub-bundle.tar.gz
           target: /tmp/
+          timeout: 60s
+          command_timeout: 10m
+          retries: 3
 
-      - name: Install, restart service, health-gate
+      - name: Install, restart service, health-gate (with retries)
         uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
         with:
+          retries: 3
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
