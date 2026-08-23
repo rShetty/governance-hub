@@ -100,7 +100,7 @@ flow can be exercised end to end.
 - [ ] Routing/cache/provider health visualization.
 - [ ] Audit integrity check display.
 - [ ] Spend/session attribution.
-- [ ] Budget enforcement preview.
+- [x] Budget enforcement preview.
 - [~] Cover key lifecycle through local Playwright.
 
 ## Phase 7 - Unified Activity

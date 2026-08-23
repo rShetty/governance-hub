@@ -4,6 +4,7 @@ export default function Cost() {
   const [state, setState] = useState({ data: null, err: '' })
   const [form, setForm] = useState({ owner: '', rate_limit_rpm: '', monthly_budget_usd: '' })
   const [message, setMessage] = useState(null)
+  const [quota, setQuota] = useState({ keyId: '', rpm: '60', budget: '25' })
 
   useEffect(() => {
     fetch('/api/bff/cost')
@@ -43,6 +44,21 @@ export default function Cost() {
       const refreshed = await fetch('/api/bff/cost')
       if (refreshed.ok) setState({ data: await refreshed.json(), err: '' })
     }
+  }
+
+  const updateQuota = async (event) => {
+    event.preventDefault()
+    const response = await fetch(`/api/bff/cost/keys/${encodeURIComponent(quota.keyId)}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        allowed_tiers: [],
+        rate_limit_rpm: quota.rpm ? Number(quota.rpm) : null,
+        monthly_budget_usd: quota.budget ? Number(quota.budget) : null,
+      }),
+    })
+    const body = await response.json().catch(() => ({}))
+    setMessage({ ok: response.ok, text: response.ok ? `Quotas updated for ${quota.keyId}.` : body.error || `status ${response.status}` })
   }
 
   const keys = Array.isArray(state.data?.keys) ? state.data.keys : []
@@ -96,6 +112,16 @@ export default function Cost() {
         <button data-testid="miser-create" className="btn btn-primary">Provision</button>
       </form>
       {message && <div className={message.ok ? 'text-sm text-teal-300' : 'text-sm text-rose-400'}>{message.text}</div>}
+      <form className="panel p-5 space-y-3" data-testid="miser-quota-form" onSubmit={updateQuota}>
+        <h2 className="font-semibold">Quotas and budget</h2>
+        <input data-testid="quota-key" required placeholder="key id" value={quota.keyId} onChange={(event) => setQuota({ ...quota, keyId: event.target.value })} />
+        <input data-testid="quota-rpm" placeholder="requests per minute" value={quota.rpm} onChange={(event) => setQuota({ ...quota, rpm: event.target.value })} />
+        <input data-testid="quota-budget" placeholder="monthly budget USD" value={quota.budget} onChange={(event) => setQuota({ ...quota, budget: event.target.value })} />
+        <button className="btn btn-primary" data-testid="quota-submit">Update</button>
+        <p className="text-xs text-slate-500">
+          Enforcement preview: at ${Number(quota.budget || 0).toFixed(2)} monthly and {quota.rpm || 0} RPM, the key is blocked after the budget is exhausted or the per-minute limit is reached.
+        </p>
+      </form>
     </div>
   )
 }
