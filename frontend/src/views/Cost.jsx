@@ -20,6 +20,12 @@ export default function Cost() {
         </p>
       </div>
       {state.err && <div className="panel p-4 text-[13px] text-amber-400/90">Miser unavailable — {state.err}</div>}
+      {state.data?.configured === false && (
+        <div className="panel p-8 text-center text-[13px] text-slate-500">
+          Miser admin integration not configured on this deployment. Set <code className="text-slate-400">MISER_ADMIN_KEY</code> in the hub environment to enable spend visibility.
+        </div>
+      )}
+      {state.data?.configured !== false && (
       <section className="panel overflow-hidden">
         <div className="px-4 py-3 border-b border-[#232833] flex items-center justify-between">
           <span className="label">Provisioned keys</span>
@@ -44,6 +50,7 @@ export default function Cost() {
           </tbody>
         </table>
       </section>
+      )}
     </div>
   )
 }

@@ -92,7 +92,7 @@ test('Registry: create, list and remove a service', async ({ page }) => {
 
   await page.getByLabel(/id \(a-z0-9-\)/i).fill(id)
   await page.getByLabel('Label').fill(`E2E Service ${runId}`)
-  await page.getByLabel(/Internal URL/i).fill('http://127.0.0.1:9999')
+  await page.getByLabel(/Internal URL/i).fill('https://example.com/health')
   await page.getByLabel('Description').fill('e2e test service')
   await page.getByRole('button', { name: 'Save service' }).click()
   await expect(
@@ -142,7 +142,7 @@ test('Agents: register an agent in Hive via API and see it in the console', asyn
       name: `E2E Agent ${runId}`,
       description: 'created by playwright',
       agent_type: 'external',
-      endpoint_url: 'http://127.0.0.1:9/nope',
+      endpoint_url: 'https://example.com/agent',
       skills: [],
     },
   })
@@ -178,7 +178,7 @@ test('MCP: create a server, grant it to an agent', async ({ request, page }) => 
       name: `MCP Agent ${runId}`,
       description: 'for mcp association',
       agent_type: 'external',
-      endpoint_url: 'http://127.0.0.1:9/nope',
+      endpoint_url: 'https://example.com/agent',
       skills: [],
     },
   })

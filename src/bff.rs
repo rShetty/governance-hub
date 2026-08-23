@@ -497,14 +497,17 @@ pub async fn cost_overview(State(state): State<AppState>, headers: HeaderMap) ->
     if let Err(r) = require_admin(&state, &headers).await {
         return r;
     }
-    match backend_get(
-        &state,
-        format!("{}/admin/keys", miser_url()),
-        svc_env(&state, "MISER_ADMIN_KEY").as_deref(),
-    )
-    .await
-    {
-        Ok(v) => Json(v).into_response(),
+    let Some(tok) = svc_env(&state, "MISER_ADMIN_KEY") else {
+        // Not configured is a normal state for fresh deployments.
+        return Json(json!({ "configured": false, "keys": [] })).into_response();
+    };
+    match backend_get(&state, format!("{}/admin/keys", miser_url()), Some(&tok)).await {
+        Ok(mut v) => {
+            if let Some(obj) = v.as_object_mut() {
+                obj.insert("configured".into(), json!(true));
+            }
+            Json(v).into_response()
+        }
         Err(e) => now_err(StatusCode::BAD_GATEWAY, &format!("miser: {e}")),
     }
 }

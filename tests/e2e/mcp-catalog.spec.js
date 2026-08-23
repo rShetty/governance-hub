@@ -26,7 +26,7 @@ test('MCP catalog: register a new server through the UI form', async ({ page }) 
 
   await page.getByTestId('mcp-name').fill(name)
   await page.getByTestId('mcp-transport').selectOption('sse')
-  await page.getByTestId('mcp-url').fill(`https://${name}.example.com/sse`)
+  await page.getByTestId('mcp-url').fill(`https://example.com/sse`)
   await page.getByTestId('mcp-description').fill('registered by playwright UI test')
   await page.getByTestId('mcp-submit').click()
 
@@ -39,7 +39,7 @@ test('MCP catalog: registration persists across reload', async ({ page }) => {
   await page.getByRole('button', { name: 'Tools & MCP' }).click()
   await page.getByTestId('toggle-mcp-form').click()
   await page.getByTestId('mcp-name').fill(name)
-  await page.getByTestId('mcp-url').fill(`https://${name}.example.com/sse`)
+  await page.getByTestId('mcp-url').fill(`https://example.com/sse`)
   await page.getByTestId('mcp-submit').click()
   await expect(page.getByText(name).first()).toBeVisible({ timeout: 10000 })
 
@@ -78,7 +78,7 @@ test('MCP catalog: association with agent works end-to-end', async ({ page }) =>
       name: `assoc-agent-${runId}`,
       description: '',
       agent_type: 'external',
-      endpoint_url: 'http://127.0.0.1:9/x',
+      endpoint_url: 'https://example.com/agent',
       skills: [],
     },
   })

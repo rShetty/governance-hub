@@ -72,7 +72,7 @@ test('MCP: register server → grant to agent → visible in catalogue', async (
       name: `MCP Flow ${runId}`,
       description: '',
       agent_type: 'external',
-      endpoint_url: 'http://127.0.0.1:9/x',
+      endpoint_url: 'https://example.com/agent',
       skills: [],
     },
   })
