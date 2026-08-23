@@ -76,13 +76,13 @@ flow can be exercised end to end.
 
 ## Phase 5 - Supply Chain Trust
 
-- [ ] Package detail view.
+- [~] Package detail view.
 - [ ] Sign package flow.
 - [ ] Verify signature flow.
-- [ ] Generate SBOM flow.
-- [ ] Vulnerability scan flow.
-- [ ] Provenance submission and verification.
-- [ ] Trust score and factor visualization.
+- [~] Generate SBOM flow.
+- [~] Vulnerability scan flow.
+- [~] Provenance submission and verification.
+- [~] Trust score and factor visualization.
 - [ ] Release readiness decision.
 - [ ] Associate packages with agents.
 - [ ] Enforce unsigned/critical-vulnerability deployment block.

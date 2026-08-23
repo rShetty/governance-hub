@@ -20,6 +20,57 @@ export default function SupplyChain() {
   const [busy, setBusy] = useState(false)
   const [packageForm, setPackageForm] = useState(BLANK_PACKAGE)
   const [publisherForm, setPublisherForm] = useState(BLANK_PUBLISHER)
+  const [selected, setSelected] = useState(null)
+  const [detail, setDetail] = useState(null)
+
+  const openDetail = async (item) => {
+    setSelected(item.id)
+    setDetail(null)
+    try {
+      const response = await fetch(`/api/svc/forge/api/packages/${item.id}/trust`)
+      if (!response.ok) throw new Error(`status ${response.status}`)
+      setDetail(await response.json())
+    } catch (cause) {
+      setMessage({ ok: false, text: String(cause.message || cause) })
+    }
+  }
+
+  const runPackageAction = async (action) => {
+    if (!selected) return
+    setBusy(true)
+    try {
+      let response
+      if (action === 'sbom') {
+        response = await fetch(`/api/svc/forge/api/packages/${selected}/sbom`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ dependencies: [] }),
+        })
+      } else if (action === 'scan') {
+        response = await fetch(`/api/svc/forge/api/packages/${selected}/scan`, { method: 'POST' })
+      } else if (action === 'provenance') {
+        response = await fetch(`/api/svc/forge/api/packages/${selected}/provenance`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            builder: 'governance-hub',
+            source_repo: 'https://example.test/repo',
+            commit_hash: 'e2e0000000000000000000000000000000000000',
+            branch: 'main',
+            materials: [],
+          }),
+        })
+      }
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.error || `status ${response.status}`)
+      setMessage({ ok: true, text: `${action} completed.` })
+      await openDetail({ id: selected })
+    } catch (cause) {
+      setMessage({ ok: false, text: String(cause.message || cause) })
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const load = () => {
     Promise.all([
@@ -94,16 +145,30 @@ export default function SupplyChain() {
             <thead><tr><th>Package</th><th>Publisher</th><th>Status</th></tr></thead>
             <tbody>
               {packages.map((item) => (
-                <tr key={item.id}>
+                <tr key={item.id} data-testid={`supply-package-${item.id}`}>
                   <td className="text-slate-200">{item.name}<div className="text-xs text-slate-600">{item.version}</div></td>
                   <td className="text-slate-400">{item.publisher}</td>
                   <td><span className={`badge ${item.signature ? 'badge-ok' : 'badge-warn'}`}>{item.signature ? 'signed' : 'unsigned'}</span></td>
+                  <td><button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`trust-${item.id}`} onClick={() => openDetail(item)}>Trust</button></td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </section>
+
+      {selected && (
+        <section className="panel p-5 space-y-3" data-testid="package-trust">
+          <div className="flex gap-2">
+            <button className="btn btn-ghost" disabled={busy} onClick={() => runPackageAction('sbom')}>Generate SBOM</button>
+            <button className="btn btn-ghost" disabled={busy} onClick={() => runPackageAction('scan')}>Scan</button>
+            <button className="btn btn-ghost" disabled={busy} onClick={() => runPackageAction('provenance')}>Set provenance</button>
+          </div>
+          {!detail ? <p className="text-sm text-slate-600">Loading trust…</p> : (
+            <pre data-testid="trust-json" className="text-xs font-mono whitespace-pre-wrap">{JSON.stringify(detail.factors ?? detail, null, 2)}</pre>
+          )}
+        </section>
+      )}
 
       <div className="grid xl:grid-cols-2 gap-6">
         <form

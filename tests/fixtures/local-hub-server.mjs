@@ -117,10 +117,27 @@ const server = http.createServer(async (request, response) => {
         version: body.version,
         publisher: body.publisher,
         signature: null,
+        factors: null,
       })
       send(response, 200, packages.at(-1))
     })
     return
+  }
+
+  if (path.match(/^\/api\/svc\/forge\/api\/packages\/([^/]+)\/trust$/) && request.method === 'GET') {
+    return send(response, 200, {
+      trust_score: 1,
+      meets_threshold: true,
+      factors: { signed: true, publisher_trusted: true, sbom_present: true, provenance_verified: true },
+    })
+  }
+
+  if (path.match(/^\/api\/svc\/forge\/api\/packages\/[^/]+\/(sbom|provenance)$/) && request.method === 'POST') {
+    return send(response, 200, { ok: true })
+  }
+
+  if (path.match(/^\/api\/svc\/forge\/api\/packages\/[^/]+\/scan$/) && request.method === 'POST') {
+    return send(response, 200, { vulnerabilities: {}, has_critical: false })
   }
 
   if (path === '/api/svc/forge/api/publishers' && request.method === 'GET') {
