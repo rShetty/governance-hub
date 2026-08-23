@@ -18,6 +18,7 @@ fn now_err(status: StatusCode, msg: &str) -> Response {
     (status, Json(json!({ "error": msg }))).into_response()
 }
 
+#[allow(clippy::result_large_err)]
 async fn require_admin(state: &AppState, headers: &HeaderMap) -> Result<auth::HubUser, Response> {
     let sid = crate::console::cookie_value_pub(headers, auth::SESSION_COOKIE).unwrap_or_default();
     let user = state
