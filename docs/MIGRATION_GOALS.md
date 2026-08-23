@@ -62,7 +62,7 @@ flow can be exercised end to end.
 
 ## Phase 4 - Unified Catalog And Tool Execution
 
-- [ ] Merge Hive MCP/skills with Relay connectors/backends into one DTO.
+- [~] Merge Hive MCP/skills with Relay connectors/backends into one DTO.
 - [ ] Install/uninstall catalog items.
 - [ ] Enable/disable backends and connectors.
 - [ ] Connect/disconnect transports.
@@ -72,7 +72,7 @@ flow can be exercised end to end.
 - [ ] Detect grants lacking an equivalent Patroculus policy.
 - [ ] Provide authorization preview.
 - [ ] Guarded tool invocation console.
-- [ ] Cover catalog lifecycle and invocation through local Playwright.
+- [~] Cover catalog lifecycle and invocation through local Playwright.
 
 ## Phase 5 - Supply Chain Trust
 

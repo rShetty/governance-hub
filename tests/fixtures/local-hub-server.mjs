@@ -118,6 +118,16 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
+  if (path === '/api/bff/catalog') {
+    return send(response, 200, {
+      total: 2,
+      items: [
+        { source: 'relay', kind: 'connector', id: 'github', name: 'GitHub connector', status: true },
+        { source: 'hive', kind: 'mcp-server', id: 'server-e2e', name: 'Fixture MCP server', status: 'active' },
+      ],
+    })
+  }
+
   if (path === '/api/bff/cost/keys' && request.method === 'POST') {
     let raw = ''
     request.on('data', chunk => { raw += chunk })

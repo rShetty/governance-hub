@@ -13,6 +13,17 @@ function useBff() {
   return { ...state, reload: () => setReloadKey((k) => k + 1) }
 }
 
+function useUnifiedCatalog() {
+  const [catalog, setCatalog] = useState({ data: null, err: '' })
+  useEffect(() => {
+    fetch('/api/bff/catalog')
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error(`status ${response.status}`))))
+      .then((data) => setCatalog({ data, err: '' }))
+      .catch((cause) => setCatalog({ data: null, err: String(cause.message || cause) }))
+  }, [])
+  return catalog
+}
+
 function useSvcRelay() {
   const [s, setS] = useState({ data: null, err: '' })
   useEffect(() => {
@@ -26,6 +37,7 @@ function useSvcRelay() {
 export default function Tools() {
   const relay = useSvcRelay()
   const bff = useBff()
+  const catalog = useUnifiedCatalog()
   const [showForm, setShowForm] = useState(false)
   const [extra, setExtra] = useState([])
 
@@ -41,6 +53,33 @@ export default function Tools() {
       </div>
 
       {bff.err && <div className="panel p-4 text-[13px] text-amber-400/90">Tools feed unavailable — {bff.err}</div>}
+
+      <section className="panel overflow-hidden" data-testid="unified-catalog">
+        <div className="px-4 py-3 border-b border-[#232833] flex items-center justify-between">
+          <span className="label">Unified capability catalog</span>
+          <span className="num text-xs text-slate-600">{catalog.data?.total ?? 0}</span>
+        </div>
+        {catalog.err && <div className="p-4 text-sm text-amber-300">{catalog.err}</div>}
+        {!catalog.err && !catalog.data && <div className="p-4 text-sm text-slate-600">Loading…</div>}
+        {catalog.data && !catalog.data.items.length && (
+          <div className="p-8 text-center text-sm text-slate-600" data-testid="catalog-empty">No capabilities registered.</div>
+        )}
+        {catalog.data?.items?.length > 0 && (
+          <table className="data" data-testid="catalog-table">
+            <thead><tr><th>Capability</th><th>Source</th><th>Kind</th><th>Status</th></tr></thead>
+            <tbody>
+              {catalog.data.items.map((item, index) => (
+                <tr key={`${item.source}-${item.kind}-${item.id}-${index}`} data-testid={`catalog-${item.source}-${item.kind}`}>
+                  <td className="text-slate-200">{String(item.name)}</td>
+                  <td><span className="badge badge-mono !text-[10px]">{item.source}</span></td>
+                  <td>{String(item.kind)}</td>
+                  <td><span className={`badge ${String(item.status) === 'false' ? 'badge-warn' : 'badge-ok'}`}>{String(item.status)}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
 
       <div className="grid xl:grid-cols-2 gap-6">
         <section className="panel overflow-hidden">

@@ -911,6 +911,81 @@ pub async fn tools_overview(State(state): State<AppState>, headers: HeaderMap) -
     .into_response()
 }
 
+/// GET /api/bff/catalog — one normalized catalog across Relay and Hive.
+pub async fn unified_catalog(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let hive_token = hive_service_token(&state).await;
+    let (relay_tools, relay_backends, relay_connectors, hive_skills, hive_mcp) = tokio::join!(
+        backend_get(&state, format!("{}/v1/tools", relay_url()), None),
+        backend_get(&state, format!("{}/mcp/backends", relay_url()), None),
+        backend_get(&state, format!("{}/v1/connectors", relay_url()), None),
+        backend_get(
+            &state,
+            format!("{}/api/skills", hive_url()),
+            hive_token.as_deref()
+        ),
+        backend_get(
+            &state,
+            format!("{}/api/mcp-servers", hive_url()),
+            hive_token.as_deref()
+        ),
+    );
+
+    let mut catalog = Vec::new();
+    let append = |catalog: &mut Vec<Value>, source: &str, kind: &str, value: Value| {
+        if let Value::Array(items) = value {
+            for item in items {
+                catalog.push(json!({
+                    "source": source,
+                    "kind": kind,
+                    "id": item.get("id").or_else(|| item.get("name")).cloned().unwrap_or(json!(null)),
+                    "name": item.get("name").cloned().unwrap_or(item.get("id").cloned().unwrap_or(json!("unnamed"))),
+                    "status": item.get("status").or_else(|| item.get("enabled")).cloned().unwrap_or(json!("unknown")),
+                    "detail": item,
+                }));
+            }
+        }
+    };
+    append(
+        &mut catalog,
+        "relay",
+        "tool",
+        relay_tools.unwrap_or(Value::Null),
+    );
+    append(
+        &mut catalog,
+        "relay",
+        "backend",
+        relay_backends.unwrap_or(Value::Null),
+    );
+    append(
+        &mut catalog,
+        "relay",
+        "connector",
+        relay_connectors.unwrap_or(Value::Null),
+    );
+    append(
+        &mut catalog,
+        "hive",
+        "skill",
+        hive_skills.unwrap_or(Value::Null),
+    );
+    append(
+        &mut catalog,
+        "hive",
+        "mcp-server",
+        hive_mcp.unwrap_or(Value::Null),
+    );
+
+    Json(json!({
+        "items": catalog,
+        "total": catalog.len(),
+    }))
+    .into_response()
+}
+
 // ── Path-based proxy passthrough for deep product pages ─────────────────────
 
 #[derive(Deserialize)]
