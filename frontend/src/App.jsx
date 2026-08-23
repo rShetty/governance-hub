@@ -62,7 +62,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  const isAdmin = !!user?.admin
+  const isAdmin = !!user?.is_admin || !!user?.admin
   const nav = user ? [...NAV, ...(isAdmin ? ADMIN_NAV : [])] : []
   const current = [...NAV, ...ADMIN_NAV].find((n) => n.id === view)
   const Current = current?.view ?? MissionControl

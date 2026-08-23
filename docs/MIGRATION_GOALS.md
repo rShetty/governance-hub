@@ -31,7 +31,7 @@ flow can be exercised end to end.
 - [x] Add a deterministic local E2E environment.
 - [~] Stub Argus, Forge, and other required backend contracts.
 - [x] Seed a signed-in admin session without external credentials.
-- [~] Run all Playwright tests locally with one documented command.
+- [x] Run all local-compatible Playwright tests locally with one documented command.
 - [ ] Make local E2E part of the standard validation gate.
 
 ## Phase 2 - Identity Lifecycle

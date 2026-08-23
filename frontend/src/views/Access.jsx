@@ -10,11 +10,15 @@ export default function Access() {
   const [resources, setResources] = useState([])
   const [simulation, setSimulation] = useState({ action: 'call', resource: 'mcp/*', definition: '', result: null })
 
-  useEffect(() => {
+  const loadPolicies = () => {
     fetch('/api/bff/policies')
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`status ${r.status}`))))
       .then((d) => setPolicies(d.policies ?? d))
       .catch((e) => setErr(String(e.message || e)))
+  }
+
+  useEffect(() => {
+    loadPolicies()
 
     fetch('/api/svc/patroclus/v1/principal/approvals')
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`status ${r.status}`))))

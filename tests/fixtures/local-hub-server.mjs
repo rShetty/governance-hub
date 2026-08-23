@@ -11,6 +11,11 @@ const identities = [
 const approvals = [{ id: 'apr_e2e_001', agent_id: 'agt_e2e_001', action: 'deploy' }]
 const sessions = [{ id: 'ses_e2e_001', agent_id: 'agt_e2e_001', active: true }]
 const miserKeys = [{ id: 'key_e2e_001', owner: 'fixture-agent', allowed_tiers: [], active: true }]
+const runtimeAgents = []
+const mcpServers = [
+  { id: 'server-e2e', name: 'Fixture MCP server', transport: 'sse', url: 'https://mcp.example.test/sse', description: '', authorized_agents: ['agt_e2e_001'] },
+]
+const policies = [{ id: 'pol_e2e_001', name: 'allow-github', engine: 'yaml', status: 'active', definition: '- name: allow-github\n  decision: allow' }]
 
 function send(response, status, body, type = 'application/json') {
   response.writeHead(status, { 'content-type': type })
@@ -36,6 +41,76 @@ const server = http.createServer(async (request, response) => {
 
   if (path === '/api/console/identities') {
     return send(response, 200, { humans: [], agents: identities })
+  }
+
+  if (path === '/api/bff/mcp' && request.method === 'GET') {
+    return send(response, 200, mcpServers)
+  }
+
+  if (path === '/api/bff/mcp' && request.method === 'POST') {
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      const server = { id: `server_${crypto.randomUUID().slice(0, 8)}`, authorized_agents: [], ...body }
+      mcpServers.push(server)
+      send(response, 201, server)
+    })
+    return
+  }
+
+  if (path.match(/^\/api\/bff\/mcp\/([^/]+)\/grant$/) && request.method === 'POST') {
+    const serverId = path.split('/')[4]
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      const server = mcpServers.find(item => item.id === serverId)
+      if (!server) return send(response, 404, { error: 'server not found' })
+      for (const agentId of body.agent_ids ?? []) {
+        if (!server.authorized_agents.includes(agentId)) server.authorized_agents.push(agentId)
+      }
+      send(response, 200, { granted: body.agent_ids ?? [] })
+    })
+    return
+  }
+
+  if (path.match(/^\/api\/bff\/mcp\/([^/]+)\/revoke$/) && request.method === 'POST') {
+    const serverId = path.split('/')[4]
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      const server = mcpServers.find(item => item.id === serverId)
+      if (!server) return send(response, 404, { error: 'server not found' })
+      for (const agentId of body.agent_ids ?? []) {
+        server.authorized_agents = server.authorized_agents.filter(id => id !== agentId)
+      }
+      send(response, 200, { revoked: body.agent_ids ?? [] })
+    })
+    return
+  }
+
+  if (path.match(/^\/api\/bff\/mcp\/([^/]+)\/access$/) && request.method === 'GET') {
+    const serverId = path.split('/')[4]
+    const server = mcpServers.find(item => item.id === serverId)
+    return send(response, 200, { agents: server?.authorized_agents ?? [] })
+  }
+
+  if (path === '/api/bff/policies' && request.method === 'POST') {
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      const policy = { id: `pol_${crypto.randomUUID().slice(0, 8)}`, status: 'active', ...body }
+      policies.push(policy)
+      send(response, 201, policy)
+    })
+    return
+  }
+
+  if (path === '/api/svc/hive/api/agents') {
+    return send(response, 200, runtimeAgents)
   }
 
   if (path.match(/^\/api\/bff\/identities\/([^/]+)\/action$/) && request.method === 'POST') {
@@ -237,7 +312,12 @@ const server = http.createServer(async (request, response) => {
   if (path === '/api/bff/runtime-agents' && request.method === 'POST') {
     let raw = ''
     request.on('data', chunk => { raw += chunk })
-    request.on('end', () => send(response, 201, { agent_id: `agent_${crypto.randomUUID().slice(0, 8)}`, name: JSON.parse(raw || '{}').name }))
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      const agent = { agent_id: `agent_${crypto.randomUUID().slice(0, 8)}`, status: 'active', ...body }
+      runtimeAgents.push(agent)
+      send(response, 201, agent)
+    })
     return
   }
 
@@ -261,9 +341,9 @@ const server = http.createServer(async (request, response) => {
     return send(response, 200, [{ id: 'res_e2e_001', name: 'Fixture API' }])
   }
 
-  if (path === '/api/bff/policies') {
+  if (path === '/api/bff/policies' && request.method === 'GET') {
     return send(response, 200, {
-      policies: [{ id: 'pol_e2e_001', name: 'allow-github', engine: 'yaml', status: 'active', definition: '- name: allow-github\n  decision: allow' }],
+      policies,
     })
   }
 
