@@ -787,6 +787,26 @@ pub async fn activity_feed(
         a_tok.as_deref(),
     )
     .await;
+    let p_tok = svc_env(&state, "PATROCLUS_ADMIN_TOKEN");
+    let m_tok = svc_env(&state, "MISER_ADMIN_KEY");
+    let hive_token = hive_service_token(&state).await;
+    let pa = backend_get(
+        &state,
+        format!("{}/v1/admin/audit", patroclus_url()),
+        p_tok.as_deref(),
+    );
+    let mi = backend_get(
+        &state,
+        format!("{}/admin/keys", miser_url()),
+        m_tok.as_deref(),
+    );
+    let hi = backend_get(
+        &state,
+        format!("{}/api/agents?limit=20&order=recent", hive_url()),
+        hive_token.as_deref(),
+    );
+
+    let (pa, mi, hi) = tokio::join!(pa, mi, hi);
 
     // Normalize into one timeline shape: {ts, source, kind, summary}
     let mut items: Vec<Value> = Vec::new();
@@ -804,12 +824,54 @@ pub async fn activity_feed(
     if let Ok(Value::Array(list)) = vg {
         for v in list {
             items.push(json!({
-                "source": "aegis",
-                "kind": v.get("action").cloned().unwrap_or(json!("egress")),
-                "summary": v.get("domain").cloned().unwrap_or(json!(null)),
-                "ts": v.get("logged_at").cloned().unwrap_or(json!(null)),
-                "raw": v,
+                    "source": "aegis",
+                    "kind": v.get("action").cloned().unwrap_or(json!("egress")),
+                    "summary": v.get("domain").cloned().unwrap_or(json!(null)),
+                    "ts": v.get("logged_at").cloned().unwrap_or(json!(null)),
+                    "raw": v,
             }));
+        }
+        if let Ok(Value::Array(list)) = pa {
+            for entry in list {
+                items.push(json!({
+                "source": "patroclus",
+                "kind": entry.get("action").cloned().unwrap_or(json!("authorization")),
+                "summary": entry.get("resource").cloned().unwrap_or(entry.get("target").cloned().unwrap_or(json!(null))),
+                "ts": entry.get("timestamp").cloned().unwrap_or(json!(null)),
+                "raw": entry,
+            }));
+            }
+        }
+        if let Ok(Value::Object(object)) = mi {
+            if let Some(Value::Array(keys)) = object.get("keys") {
+                for key in keys {
+                    items.push(json!({
+                    "source": "miser",
+                    "kind": if key.get("active").and_then(Value::as_bool).unwrap_or(true) { "key.active" } else { "key.revoked" },
+                    "summary": key.get("owner").cloned().unwrap_or(json!(null)),
+                    "ts": key.get("created_at").cloned().map(|value| value.to_string()).unwrap_or_default(),
+                    "raw": key,
+                }));
+                }
+            }
+        }
+        if let Ok(value) = hi {
+            let agents = value.as_array().cloned().unwrap_or_else(|| {
+                value
+                    .get("items")
+                    .and_then(Value::as_array)
+                    .cloned()
+                    .unwrap_or_default()
+            });
+            for agent in agents {
+                items.push(json!({
+                    "source": "hive",
+                    "kind": "agent.registered",
+                    "summary": agent.get("name").cloned().unwrap_or(json!(null)),
+                    "ts": agent.get("created_at").cloned().unwrap_or(json!(null)),
+                    "raw": agent,
+                }));
+            }
         }
     }
     items.sort_by(|a, b| {

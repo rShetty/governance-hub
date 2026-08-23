@@ -106,7 +106,7 @@ flow can be exercised end to end.
 ## Phase 7 - Unified Activity
 
 - [ ] Canonical event DTO.
-- [ ] Normalizers for all eight sources.
+- [~] Normalizers for all eight sources.
 - [ ] Unified timeline endpoint.
 - [ ] Actor/session/resource/service/severity filters.
 - [ ] End-to-end trace detail view.
