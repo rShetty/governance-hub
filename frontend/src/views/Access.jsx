@@ -6,6 +6,7 @@ export default function Access() {
   const [approvals, setApprovals] = useState([])
   const [sessions, setSessions] = useState([])
   const [message, setMessage] = useState(null)
+  const [simulation, setSimulation] = useState({ action: 'call', resource: 'mcp/*', definition: '', result: null })
 
   useEffect(() => {
     fetch('/api/bff/policies')
@@ -57,6 +58,22 @@ export default function Access() {
     setMessage({ ok: response.ok, text: response.ok ? `Token ${tokenId} revoked.` : body.error })
   }
 
+  const runSimulation = async (event) => {
+    event.preventDefault()
+    const response = await fetch('/api/bff/access/simulate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: simulation.action,
+        resource: simulation.resource,
+        requested_scopes: [],
+        definition: simulation.definition,
+      }),
+    })
+    const body = await response.json().catch(() => ({}))
+    setSimulation((current) => ({ ...current, result: response.ok ? body : { error: body.error } }))
+  }
+
   const list = Array.isArray(policies)
     ? policies
     : Array.isArray(policies?.policies)
@@ -97,6 +114,20 @@ export default function Access() {
         <p className="text-xs text-slate-500 mt-1">Immediately rejects the supplied JTI at Patroclus.</p>
         <button className="btn btn-primary mt-3" onClick={revokeToken}>Select token</button>
       </section>
+
+      <form className="panel p-5 space-y-3" data-testid="policy-simulator" onSubmit={runSimulation}>
+        <h2 className="font-semibold">Policy simulator</h2>
+        <p className="text-xs text-slate-500">Advisory preview against the YAML below; Patroclus remains the enforcement authority.</p>
+        <div className="grid md:grid-cols-2 gap-3">
+          <input data-testid="simulate-action" value={simulation.action} onChange={(event) => setSimulation({ ...simulation, action: event.target.value })} />
+          <input data-testid="simulate-resource" value={simulation.resource} onChange={(event) => setSimulation({ ...simulation, resource: event.target.value })} />
+        </div>
+          <textarea data-testid="simulate-yaml" rows="5" placeholder="YAML policy rules" value={simulation.definition} onChange={(event) => setSimulation({ ...simulation, definition: event.target.value })} />
+        <button className="btn btn-primary" data-testid="simulate-run">Simulate</button>
+        {simulation.result && (
+          <pre className="text-xs text-slate-300" data-testid="simulation-result">{JSON.stringify(simulation.result, null, 2)}</pre>
+        )}
+      </form>
 
       {message && <div className={message.ok ? 'text-sm text-teal-300' : 'text-sm text-rose-400'}>{message.text}</div>}
       <section className="panel overflow-hidden">

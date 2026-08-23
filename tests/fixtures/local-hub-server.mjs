@@ -128,6 +128,20 @@ const server = http.createServer(async (request, response) => {
     })
   }
 
+  if (path === '/api/bff/access/simulate' && request.method === 'POST') {
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      send(response, 200, {
+        decision: body.action === 'call' && body.resource === 'mcp/github' ? 'allow' : 'deny',
+        matched_rule: body.resource === 'mcp/github' ? 'allow-github' : null,
+        advisory: true,
+      })
+    })
+    return
+  }
+
   if (path === '/api/bff/cost/keys' && request.method === 'POST') {
     let raw = ''
     request.on('data', chunk => { raw += chunk })

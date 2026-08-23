@@ -95,6 +95,7 @@ pub fn router(state: AppState) -> Router {
             "/api/bff/access/tokens/{token_id}/revoke",
             post(bff::token_revoke),
         )
+        .route("/api/bff/access/simulate", post(bff::policy_simulate))
         .route("/api/bff/mcp", get(bff::mcp_list).post(bff::mcp_create))
         .route("/api/bff/mcp/{server_id}/grant", post(bff::mcp_grant))
         .route("/api/bff/mcp/{server_id}/revoke", post(bff::mcp_revoke))

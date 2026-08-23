@@ -56,8 +56,8 @@ flow can be exercised end to end.
 - [ ] Session inspector with trajectory and constraints.
 - [x] Session kill action.
 - [ ] Token revocation action.
-- [ ] Policy simulator using Patroclus check-access.
-- [ ] Show simulation result before policy save.
+- [~] Policy simulator using Patroclus check-access.
+- [x] Show simulation result before policy save.
 - [ ] Cover all access operations through local Playwright.
 
 ## Phase 4 - Unified Catalog And Tool Execution

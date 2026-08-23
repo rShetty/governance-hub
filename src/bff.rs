@@ -514,6 +514,83 @@ pub async fn token_revoke(
     }
 }
 
+#[derive(Deserialize)]
+pub struct PolicySimulationRequest {
+    pub action: String,
+    pub resource: String,
+    #[serde(default)]
+    pub requested_scopes: Vec<String>,
+    pub definition: String,
+}
+
+#[derive(serde::Deserialize)]
+struct SimulationRule {
+    name: String,
+    #[serde(default)]
+    actions: Vec<String>,
+    #[serde(default)]
+    resources: Vec<String>,
+    decision: String,
+    #[serde(default)]
+    reason: String,
+}
+
+fn wildcard_match(pattern: &str, value: &str) -> bool {
+    if pattern == "*" {
+        return true;
+    }
+    if let Some(prefix) = pattern.strip_suffix('*') {
+        return value.starts_with(prefix);
+    }
+    pattern == value
+}
+
+/// POST /api/bff/access/simulate — advisory preview of one YAML policy.
+pub async fn policy_simulate(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<PolicySimulationRequest>,
+) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let rules = match serde_yaml::from_str::<Vec<SimulationRule>>(&body.definition) {
+        Ok(rules) => rules,
+        Err(error) => {
+            return now_err(
+                StatusCode::BAD_REQUEST,
+                &format!("invalid policy YAML: {error}"),
+            )
+        }
+    };
+    for rule in rules {
+        let action_matches = rule
+            .actions
+            .iter()
+            .any(|action| wildcard_match(action, &body.action));
+        let resource_matches = rule
+            .resources
+            .iter()
+            .any(|resource| wildcard_match(resource, &body.resource));
+        if action_matches && resource_matches {
+            return Json(json!({
+                "decision": rule.decision,
+                "matched_rule": rule.name,
+                "reason": if rule.reason.is_empty() { format!("Matched {}", rule.name) } else { rule.reason },
+                "advisory": true,
+            }))
+            .into_response();
+        }
+    }
+    Json(json!({
+        "decision": "deny",
+        "matched_rule": null,
+        "reason": "No policy rule matched",
+        "advisory": true,
+    }))
+    .into_response()
+}
+
 mod argus {
     use super::*;
 
