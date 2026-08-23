@@ -113,6 +113,11 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/bff/activity", get(bff::activity_feed))
         .route("/api/bff/trace/{session_id}", get(bff::trace_detail))
+        .route("/api/bff/access/delegations", post(bff::delegation_issue))
+        .route(
+            "/api/bff/access/grants/{grant_id}/revoke",
+            post(bff::grant_revoke),
+        )
         .route("/api/bff/cost", get(bff::cost_overview))
         .route("/api/bff/cost/keys", post(bff::miser_key_create))
         .route(

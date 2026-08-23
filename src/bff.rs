@@ -1155,6 +1155,77 @@ pub async fn trace_detail(
     .into_response()
 }
 
+#[derive(Deserialize)]
+pub struct DelegationRequest {
+    pub agent_id: String,
+    pub scopes: Vec<String>,
+    pub expires_in_seconds: u64,
+    #[serde(default)]
+    pub constraints: Value,
+}
+
+/// POST /api/bff/access/delegations — issue a principal-scoped delegation.
+/// The returned JWT is stripped; the Hub records grant metadata only.
+pub async fn delegation_issue(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<DelegationRequest>,
+) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let token = svc_env(&state, "PATROCLUS_ADMIN_TOKEN");
+    let payload = json!({
+        "agent_id": body.agent_id,
+        "scopes": body.scopes,
+        "constraints": body.constraints,
+        "expires_in_seconds": body.expires_in_seconds,
+    });
+    match backend_post(
+        &state,
+        format!("{}/v1/principal/delegate", patroclus_url()),
+        token.as_deref(),
+        payload,
+    )
+    .await
+    {
+        Ok(mut result) => {
+            if let Some(object) = result.as_object_mut() {
+                object.remove("delegation_token");
+                object.insert(
+                    "token_delivery".into(),
+                    json!("backend-issued, not displayed"),
+                );
+            }
+            Json(result).into_response()
+        }
+        Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("patroclus: {error}")),
+    }
+}
+
+/// POST /api/bff/access/grants/{id}/revoke — revoke a delegation grant.
+pub async fn grant_revoke(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(grant_id): Path<String>,
+) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let token = svc_env(&state, "PATROCLUS_ADMIN_TOKEN");
+    match backend_post(
+        &state,
+        format!("{}/v1/principal/grants/{grant_id}/revoke", patroclus_url()),
+        token.as_deref(),
+        json!({}),
+    )
+    .await
+    {
+        Ok(result) => Json(json!({ "grant_id": grant_id, "result": result })).into_response(),
+        Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("patroclus: {error}")),
+    }
+}
+
 // ── Cost (Miser) ─────────────────────────────────────────────────────────────
 
 pub async fn cost_overview(State(state): State<AppState>, headers: HeaderMap) -> Response {

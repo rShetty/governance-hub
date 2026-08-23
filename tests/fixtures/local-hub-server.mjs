@@ -110,6 +110,17 @@ const server = http.createServer(async (request, response) => {
     })
   }
 
+  if (path === '/api/bff/access/delegations' && request.method === 'POST') {
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => send(response, 200, { grant_id: 'grant_e2e_001', scopes: JSON.parse(raw || '{}').scopes ?? [], token_delivery: 'backend-issued, not displayed' }))
+    return
+  }
+
+  if (path === '/api/bff/access/grants/grant_e2e_001/revoke' && request.method === 'POST') {
+    return send(response, 200, { result: { count: 1 } })
+  }
+
   if (path === '/api/bff/cost') {
     return send(response, 200, { configured: true, keys: miserKeys })
   }

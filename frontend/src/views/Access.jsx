@@ -58,6 +58,30 @@ export default function Access() {
     setMessage({ ok: response.ok, text: response.ok ? `Token ${tokenId} revoked.` : body.error })
   }
 
+  const issueDelegation = async (event) => {
+    event.preventDefault()
+    const form = event.currentTarget
+    const response = await fetch('/api/bff/access/delegations', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        agent_id: form.agent_id.value,
+        scopes: form.scopes.value.split(',').map((scope) => scope.trim()).filter(Boolean),
+        expires_in_seconds: Number(form.expires.value),
+      }),
+    })
+    const body = await response.json().catch(() => ({}))
+    setMessage({ ok: response.ok, text: response.ok ? `Delegation ${body.grant_id} issued. Token remains backend-issued and is not displayed.` : body.error })
+  }
+
+  const revokeGrant = async () => {
+    const grantId = window.prompt('Grant ID:')
+    if (!grantId?.trim()) return
+    const response = await fetch(`/api/bff/access/grants/${encodeURIComponent(grantId)}/revoke`, { method: 'POST' })
+    const body = await response.json().catch(() => ({}))
+    setMessage({ ok: response.ok, text: response.ok ? `Grant ${grantId} revoked.` : body.error })
+  }
+
   const runSimulation = async (event) => {
     event.preventDefault()
     const response = await fetch('/api/bff/access/simulate', {
@@ -113,6 +137,19 @@ export default function Access() {
         <h2 className="font-semibold">Revoke token</h2>
         <p className="text-xs text-slate-500 mt-1">Immediately rejects the supplied JTI at Patroclus.</p>
         <button className="btn btn-primary mt-3" onClick={revokeToken}>Select token</button>
+      </section>
+
+      <form className="panel p-5 space-y-3" data-testid="delegation-form" onSubmit={issueDelegation}>
+        <h2 className="font-semibold">Issue delegation</h2>
+        <input name="agent_id" required placeholder="Patroclus agent UUID" />
+        <input name="scopes" required placeholder="relay:call,miser:route" />
+        <input name="expires" type="number" min="60" defaultValue="900" />
+        <button className="btn btn-primary" data-testid="delegation-submit">Issue</button>
+      </form>
+
+      <section className="panel p-5">
+        <h2 className="font-semibold">Grants</h2>
+        <button className="btn btn-primary mt-3" onClick={revokeGrant}>Revoke by ID</button>
       </section>
 
       <form className="panel p-5 space-y-3" data-testid="policy-simulator" onSubmit={runSimulation}>

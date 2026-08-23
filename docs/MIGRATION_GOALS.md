@@ -52,7 +52,7 @@ flow can be exercised end to end.
 - [ ] Resource list/create/detail management.
 - [ ] Policy create/read/edit/delete management.
 - [~] Approval queue approve/deny actions.
-- [ ] Delegation issuance and grant revocation.
+- [x] Delegation issuance and grant revocation.
 - [ ] Session inspector with trajectory and constraints.
 - [x] Session kill action.
 - [x] Token revocation action.
