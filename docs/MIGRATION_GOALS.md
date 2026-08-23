@@ -39,13 +39,13 @@ flow can be exercised end to end.
 - [~] Unified actor detail model linking Argus, Hive, and Patroclus IDs.
 - [x] Mint machine identity from Agents UI.
 - [x] Revoke and restore Argus identities.
-- [ ] Create and remove Hive runtime agents.
+- [~] Create and remove Hive runtime agents.
 - [ ] Link Patroclus actor/agent records.
-- [ ] Trigger Patroclus emergency kill and restore.
-- [ ] Revoke Patroclus tokens.
-- [ ] Show per-backend success/failure for cross-service operations.
-- [ ] Require explicit confirmation and operator attribution.
-- [ ] Cover every lifecycle action through local Playwright.
+- [~] Trigger Patroclus emergency kill and restore.
+- [x] Revoke Patroclus tokens.
+- [~] Show per-backend success/failure for cross-service operations.
+- [~] Require explicit confirmation and operator attribution.
+- [~] Cover every lifecycle action through local Playwright.
 
 ## Phase 3 - Access Operations
 
@@ -55,7 +55,7 @@ flow can be exercised end to end.
 - [ ] Delegation issuance and grant revocation.
 - [ ] Session inspector with trajectory and constraints.
 - [x] Session kill action.
-- [ ] Token revocation action.
+- [x] Token revocation action.
 - [~] Policy simulator using Patroclus check-access.
 - [x] Show simulation result before policy save.
 - [ ] Cover all access operations through local Playwright.
