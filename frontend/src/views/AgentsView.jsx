@@ -11,6 +11,7 @@ export default function AgentsView() {
   const [dir, setDir] = useState({ data: null, err: '' })
   const [actionError, setActionError] = useState('')
   const [identityForm, setIdentityForm] = useState({ name: '', scopes: 'relay:call' })
+  const [runtimeForm, setRuntimeForm] = useState({ name: '', endpoint_url: '' })
 
   useEffect(() => {
     svcGet('hive', '/api/agents?limit=100&order=recent')
@@ -88,6 +89,32 @@ export default function AgentsView() {
     }
   }
 
+  const createRuntimeAgent = async (event) => {
+    event.preventDefault()
+    setActionError('')
+    try {
+      const response = await fetch('/api/bff/runtime-agents', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...runtimeForm, description: 'Created from Governance Hub' }),
+      })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.error || `status ${response.status}`)
+      setActionError(`Runtime agent ${body.agent_id ?? body.id ?? runtimeForm.name} registered.`)
+      setRuntimeForm({ name: '', endpoint_url: '' })
+    } catch (error) {
+      setActionError(String(error.message || error))
+    }
+  }
+
+  const checkRuntimeHealth = async () => {
+    const agentId = window.prompt('Hive agent ID:')
+    if (!agentId?.trim()) return
+    const response = await fetch(`/api/bff/runtime-agents/${encodeURIComponent(agentId)}/health`)
+    const body = await response.json().catch(() => ({}))
+    setActionError(response.ok ? `Health checked ${agentId}: ${body.status ?? 'ok'}` : body.error || `status ${response.status}`)
+  }
+
   const runtimeRaw = Array.isArray(hive.data)
     ? hive.data
     : (hive.data?.items ?? hive.data?.agents ?? [])
@@ -105,8 +132,16 @@ export default function AgentsView() {
             Runtime actors (Hive) and their ecosystem identities (Argus) — one roster.
           </p>
           <button className="btn btn-ghost mt-2" onClick={emergencyKill}>Emergency stop</button>
+          <button className="btn btn-ghost mt-2 ml-2" onClick={checkRuntimeHealth}>Check runtime health</button>
         </div>
       </div>
+
+      <form className="panel p-5 space-y-3" data-testid="runtime-agent-form" onSubmit={createRuntimeAgent}>
+        <h2 className="font-semibold">Register runtime agent</h2>
+        <input data-testid="runtime-name" required placeholder="agent name" value={runtimeForm.name} onChange={(event) => setRuntimeForm({ ...runtimeForm, name: event.target.value })} />
+        <input data-testid="runtime-endpoint" required type="url" placeholder="https://agent.example.test" value={runtimeForm.endpoint_url} onChange={(event) => setRuntimeForm({ ...runtimeForm, endpoint_url: event.target.value })} />
+        <button className="btn btn-primary" data-testid="runtime-submit">Register</button>
+      </form>
 
       <form className="panel p-5 space-y-3" data-testid="identity-mint-form" onSubmit={mintIdentity}>
         <h2 className="font-semibold">Mint machine identity</h2>

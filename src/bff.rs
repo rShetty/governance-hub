@@ -657,6 +657,67 @@ pub async fn identity_mint(
     }
 }
 
+#[derive(Deserialize)]
+pub struct RuntimeAgentRequest {
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub endpoint_url: String,
+}
+
+/// POST /api/bff/runtime-agents — register an external Hive runtime agent.
+pub async fn runtime_agent_create(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<RuntimeAgentRequest>,
+) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let token = hive_service_token(&state).await;
+    let payload = json!({
+        "name": body.name,
+        "description": body.description,
+        "agent_type": "external",
+        "endpoint_url": body.endpoint_url,
+        "skills": [],
+    });
+    match backend_post(
+        &state,
+        format!("{}/api/agent/register", hive_url()),
+        token.as_deref(),
+        payload,
+    )
+    .await
+    {
+        Ok(result) => Json(result).into_response(),
+        Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("hive: {error}")),
+    }
+}
+
+/// GET /api/bff/runtime-agents/{id}/health — Hub-owned health check.
+pub async fn runtime_agent_health(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(agent_id): Path<String>,
+) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let token = hive_service_token(&state).await;
+    match backend_get(
+        &state,
+        format!("{}/api/agents/{agent_id}/health", hive_url()),
+        token.as_deref(),
+    )
+    .await
+    {
+        Ok(result) => Json(result).into_response(),
+        Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("hive: {error}")),
+    }
+}
+
 mod argus {
     use super::*;
 

@@ -97,6 +97,11 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/bff/access/simulate", post(bff::policy_simulate))
         .route("/api/bff/identities/mint", post(bff::identity_mint))
+        .route("/api/bff/runtime-agents", post(bff::runtime_agent_create))
+        .route(
+            "/api/bff/runtime-agents/{agent_id}/health",
+            get(bff::runtime_agent_health),
+        )
         .route("/api/bff/mcp", get(bff::mcp_list).post(bff::mcp_create))
         .route("/api/bff/mcp/{server_id}/grant", post(bff::mcp_grant))
         .route("/api/bff/mcp/{server_id}/revoke", post(bff::mcp_revoke))

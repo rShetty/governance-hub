@@ -167,6 +167,17 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
+  if (path === '/api/bff/runtime-agents' && request.method === 'POST') {
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => send(response, 201, { agent_id: `agent_${crypto.randomUUID().slice(0, 8)}`, name: JSON.parse(raw || '{}').name }))
+    return
+  }
+
+  if (path === '/api/bff/runtime-agents/agent_e2e_001/health' && request.method === 'GET') {
+    return send(response, 200, { status: 'healthy' })
+  }
+
   if (path === '/api/bff/cost/keys' && request.method === 'POST') {
     let raw = ''
     request.on('data', chunk => { raw += chunk })
