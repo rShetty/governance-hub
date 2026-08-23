@@ -89,6 +89,24 @@ const server = http.createServer(async (request, response) => {
     return send(response, 200, { configured: true, keys: miserKeys })
   }
 
+  if (path === '/api/svc/sentiel/api/alerts') {
+    return send(response, 200, [{ id: 'alert_e2e_001', title: 'Spending spike detected' }])
+  }
+
+  if (path === '/api/svc/sentiel/api/alerts/alert_e2e_001/acknowledge' && request.method === 'POST') {
+    return send(response, 200, { acknowledged: 'alert_e2e_001' })
+  }
+
+  if (path === '/api/svc/aegis/api/attestation/verify' && request.method === 'POST') {
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      send(response, 200, { agent_id: body.agent_id, verified: body.process_hash === 'valid-hash' })
+    })
+    return
+  }
+
   if (path === '/api/bff/cost/keys' && request.method === 'POST') {
     let raw = ''
     request.on('data', chunk => { raw += chunk })

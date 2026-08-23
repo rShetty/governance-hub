@@ -1,0 +1,11 @@
+[server]
+host = "127.0.0.1"
+port = 18788
+
+[database]
+path = "/tmp/governance-hub-e2e-forge.db"
+
+[trust]
+min_trust_score = 0.5
+rescan_threshold_days = 30
+block_on_critical_vuln = true
