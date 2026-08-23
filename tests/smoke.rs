@@ -65,6 +65,75 @@ async fn get(app: axum::Router, uri: &str) -> (axum::http::StatusCode, String) {
 }
 
 #[tokio::test]
+async fn proxy_forwards_methods_and_bodies_for_admins_only() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+
+    let backend = axum::Router::new().route(
+        "/echo",
+        axum::routing::any(
+            |method: axum::http::Method, body: axum::body::Bytes| async move {
+                format!("{}:{}", method, String::from_utf8_lossy(&body))
+            },
+        ),
+    );
+    let server = tokio::spawn(async move {
+        axum::serve(listener, backend).await.unwrap();
+    });
+
+    let mut services = HashMap::new();
+    services.insert(
+        "forge".to_string(),
+        governance_hub::config::ServiceConfig {
+            public_url: None,
+            url: format!("http://{address}"),
+            token: None,
+            api_token: None,
+            health_path: "/health".into(),
+            label: "Forge".into(),
+            description: "test backend".into(),
+            color: "#fff".into(),
+            ui_path: String::new(),
+        },
+    );
+    let state = Config {
+        services,
+        listen: "127.0.0.1:0".into(),
+        admin_token: Some("test-admin-token".into()),
+        oidc_issuer: None,
+        oidc_client_id: None,
+        oidc_client_secret: None,
+    }
+    .into_app_state();
+
+    let admin_cookie = session_cookie_for(&state, true);
+    let app = router(state.clone());
+    let req = axum::http::Request::builder()
+        .method(axum::http::Method::DELETE)
+        .uri("/api/svc/forge/echo")
+        .header("cookie", &admin_cookie)
+        .body(Body::from("release-package"))
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    assert_eq!(bytes.as_ref(), b"DELETE:release-package");
+
+    let member_cookie = session_cookie_for(&state, false);
+    let app = router(state);
+    let req = axum::http::Request::builder()
+        .method(axum::http::Method::DELETE)
+        .uri("/api/svc/forge/echo")
+        .header("cookie", &member_cookie)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+    assert_eq!(response.status(), axum::http::StatusCode::FORBIDDEN);
+
+    server.abort();
+}
+
+#[tokio::test]
 async fn health_is_public_and_json() {
     let (status, body) = get(router(test_state()), "/health").await;
     assert_eq!(status, axum::http::StatusCode::OK);
@@ -181,27 +250,29 @@ async fn hashed_ui_assets_are_served_with_real_mime_types() {
 }
 
 #[tokio::test]
-async fn proxy_requires_admin_token() {
+async fn proxy_requires_admin_session() {
     let app = router(test_state());
-    // No token → 401
+    // No session → 401
     let req = axum::http::Request::builder()
         .uri("/api/svc/miser/health/ready")
         .body(Body::empty())
         .unwrap();
     let resp = app.clone().oneshot(req).await.unwrap();
     assert_eq!(resp.status(), axum::http::StatusCode::UNAUTHORIZED);
-    // Wrong token → 401
+    // Member session → 403
+    let state = test_state();
+    let cookie = session_cookie_for(&state, false);
     let req = axum::http::Request::builder()
         .uri("/api/svc/miser/health/ready")
-        .header("authorization", "Bearer wrong")
+        .header("cookie", &cookie)
         .body(Body::empty())
         .unwrap();
-    let resp = app.oneshot(req).await.unwrap();
-    assert_eq!(resp.status(), axum::http::StatusCode::UNAUTHORIZED);
+    let resp = router(state).oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), axum::http::StatusCode::FORBIDDEN);
 }
 
 #[tokio::test]
-async fn proxy_disabled_without_token_config() {
+async fn proxy_reports_unreachable_backend_after_authorization() {
     let mut services = std::collections::HashMap::new();
     services.insert(
         "miser".to_string(),
@@ -220,7 +291,7 @@ async fn proxy_disabled_without_token_config() {
     let state = Config {
         services,
         listen: "127.0.0.1:0".into(),
-        admin_token: None, // env unset in tests → proxy must refuse
+        admin_token: None,
         oidc_issuer: None,
         oidc_client_id: None,
         oidc_client_secret: None,
@@ -233,14 +304,8 @@ async fn proxy_disabled_without_token_config() {
         .body(Body::empty())
         .unwrap();
     let resp = router(state).oneshot(req).await.unwrap();
-    // Auth gate passed; proxy then fails to reach the unreachable backend
-    // (or refuses outright depending on ordering) — both prove it's locked.
-    assert!(
-        resp.status() == axum::http::StatusCode::SERVICE_UNAVAILABLE
-            || resp.status() == axum::http::StatusCode::BAD_GATEWAY,
-        "got {}",
-        resp.status()
-    );
+    // Authorization passed; the unreachable backend is reported as degraded.
+    assert_eq!(resp.status(), axum::http::StatusCode::BAD_GATEWAY);
 }
 
 #[tokio::test]

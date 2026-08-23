@@ -5,60 +5,31 @@
 
 use axum::{
     extract::{Path, Query, State},
-    http::{header, StatusCode},
-    middleware::Next,
-    response::{IntoResponse, Response},
+    http::StatusCode,
+    response::IntoResponse,
 };
 use serde_json::json;
 
-use crate::AppState;
+use crate::{auth, AppState};
 
-/// Phase-0 hard gate on the service proxy: every `/api/svc/*` call must
-/// present `Authorization: Bearer <admin_token>` (config `admin_token`,
-/// falling back to env `HUB_ADMIN_TOKEN`). When no token is configured the
-/// proxy is disabled entirely — it must never be silently open.
-pub async fn require_admin_token(
-    State(state): State<AppState>,
-    request: axum::extract::Request,
-    next: Next,
-) -> Result<Response, (StatusCode, axum::Json<serde_json::Value>)> {
-    let configured = state
-        .config
-        .admin_token
-        .clone()
-        .or_else(|| std::env::var("HUB_ADMIN_TOKEN").ok());
-
-    let Some(expected) = configured.filter(|t| !t.is_empty()) else {
-        return Err((
-            StatusCode::SERVICE_UNAVAILABLE,
-            axum::Json(json!({"error": "proxy disabled: HUB_ADMIN_TOKEN not configured"})),
-        ));
-    };
-
-    let presented = request
-        .headers()
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "));
-
-    match presented {
-        Some(presented) if constant_time_eq(presented.as_bytes(), expected.as_bytes()) => {
-            Ok(next.run(request).await)
-        }
-        _ => Err((
+async fn require_admin(
+    state: &AppState,
+    headers: &axum::http::HeaderMap,
+) -> Result<auth::HubUser, (StatusCode, axum::Json<serde_json::Value>)> {
+    let sid = crate::console::cookie_value_pub(headers, auth::SESSION_COOKIE).unwrap_or_default();
+    let user = state.sessions.get(&sid).ok_or_else(|| {
+        (
             StatusCode::UNAUTHORIZED,
-            axum::Json(json!({"error": "admin token required"})),
-        )),
+            axum::Json(json!({"error": "login required"})),
+        )
+    })?;
+    if !user.is_admin {
+        return Err((
+            StatusCode::FORBIDDEN,
+            axum::Json(json!({"error": "admin required"})),
+        ));
     }
-}
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    a.iter()
-        .zip(b.iter())
-        .fold(0u8, |acc, (x, y)| acc | (x ^ y))
-        == 0
+    Ok(user)
 }
 
 pub fn validate(
@@ -84,7 +55,7 @@ fn state_has_service(service: &str) -> bool {
     // Cheap compile-time-known registry; config presence checked at proxy time.
     matches!(
         service,
-        "hive" | "patroclus" | "relay" | "miser" | "sentiel" | "aegis"
+        "hive" | "patroclus" | "relay" | "miser" | "sentiel" | "aegis" | "forge"
     )
 }
 
@@ -117,6 +88,9 @@ async fn forward(
 
     let mut req = match method {
         axum::http::Method::POST => state.client.post(&url),
+        axum::http::Method::PUT => state.client.put(&url),
+        axum::http::Method::PATCH => state.client.patch(&url),
+        axum::http::Method::DELETE => state.client.delete(&url),
         _ => state.client.get(&url),
     };
     // Prefer the configured service token; otherwise pass through the
@@ -169,6 +143,9 @@ pub async fn proxy_get(
     path: Path<(String, String)>,
     Query(query): Query<Vec<(String, String)>>,
 ) -> impl IntoResponse {
+    if let Err(error) = require_admin(&state, &headers).await {
+        return error.into_response();
+    }
     let caller_auth = headers
         .get("authorization")
         .and_then(|v| v.to_str().ok())
@@ -188,16 +165,21 @@ pub async fn proxy_get(
         qs,
     )
     .await
+    .into_response()
 }
 
 #[axum::debug_handler]
-pub async fn proxy_post(
+pub async fn proxy_method(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
+    method: axum::http::Method,
     path: Path<(String, String)>,
     Query(query): Query<Vec<(String, String)>>,
     body: axum::body::Bytes,
 ) -> impl IntoResponse {
+    if let Err(error) = require_admin(&state, &headers).await {
+        return error.into_response();
+    }
     let body = if body.is_empty() { None } else { Some(body) };
     let caller_auth = headers
         .get("authorization")
@@ -209,13 +191,8 @@ pub async fn proxy_post(
         .collect::<Vec<_>>()
         .join("&");
     let qs = (!qs.is_empty()).then_some(qs);
-    forward(
-        State(state),
-        path,
-        axum::http::Method::POST,
-        body,
-        caller_auth,
-        qs,
-    )
-    .await
+    match forward(State(state), path, method, body, caller_auth, qs).await {
+        Ok(response) => response,
+        Err(error) => error.into_response(),
+    }
 }

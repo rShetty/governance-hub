@@ -48,3 +48,11 @@ url = "http://127.0.0.1:8686"
 health_path = "/health/live"
 ui_path = "http://127.0.0.1:8686/"
 color = "#ef4444"
+
+[services.forge]
+label = "Forge"
+description = "Agent supply-chain security — signing, SBOM, scanning, provenance"
+url = "http://127.0.0.1:8788"
+health_path = "/health"
+ui_path = ""
+color = "#f97316"

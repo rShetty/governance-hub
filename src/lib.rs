@@ -67,7 +67,11 @@ pub fn router(state: AppState) -> Router {
         )
         .route(
             "/api/svc/{service}/{*path}",
-            get(proxy::proxy_get).post(proxy::proxy_post),
+            get(proxy::proxy_get)
+                .post(proxy::proxy_method)
+                .put(proxy::proxy_method)
+                .patch(proxy::proxy_method)
+                .delete(proxy::proxy_method),
         )
         .route("/api/bff/fleet", get(bff::fleet_overview))
         .route("/api/bff/agents", post(bff::agents_create))
