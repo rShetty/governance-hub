@@ -360,6 +360,7 @@ pub async fn identity_action(
     }
 }
 
+#[allow(clippy::result_large_err)]
 async fn patroclus_admin(
     state: &AppState,
     headers: &HeaderMap,
