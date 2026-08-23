@@ -83,9 +83,9 @@ flow can be exercised end to end.
 - [~] Vulnerability scan flow.
 - [~] Provenance submission and verification.
 - [~] Trust score and factor visualization.
-- [ ] Release readiness decision.
+- [~] Release readiness decision.
 - [ ] Associate packages with agents.
-- [ ] Enforce unsigned/critical-vulnerability deployment block.
+- [~] Enforce unsigned/critical-vulnerability deployment block.
 - [ ] Publisher/key management improvements.
 - [ ] Cover full supply-chain decision path through local Playwright.
 

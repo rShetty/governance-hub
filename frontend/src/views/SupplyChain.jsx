@@ -165,7 +165,21 @@ export default function SupplyChain() {
             <button className="btn btn-ghost" disabled={busy} onClick={() => runPackageAction('provenance')}>Set provenance</button>
           </div>
           {!detail ? <p className="text-sm text-slate-600">Loading trust…</p> : (
-            <pre data-testid="trust-json" className="text-xs font-mono whitespace-pre-wrap">{JSON.stringify(detail.factors ?? detail, null, 2)}</pre>
+            <>
+              <div className="flex items-center gap-3" data-testid="release-decision">
+                {detail.has_critical || detail.factors?.has_critical ? (
+                  <span className="badge badge-crit">blocked: critical vulnerability</span>
+                ) : !detail.factors?.signed && detail.meets_threshold === false ? (
+                  <span className="badge badge-warn">blocked: unsigned or below threshold</span>
+                ) : detail.meets_threshold ? (
+                  <span className="badge badge-ok">deployable</span>
+                ) : (
+                  <span className="badge badge-warn">untrusted</span>
+                )}
+                <span className="num text-sm text-slate-300">trust {detail.trust_score ?? '—'}</span>
+              </div>
+              <pre data-testid="trust-json" className="text-xs font-mono whitespace-pre-wrap">{JSON.stringify(detail.factors ?? detail, null, 2)}</pre>
+            </>
           )}
         </section>
       )}
