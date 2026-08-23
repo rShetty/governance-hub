@@ -253,6 +253,17 @@ const server = http.createServer(async (request, response) => {
     return send(response, 200, { source: 'relay', id: 'github', status: 'connected', healthy: true })
   }
 
+  if (path === '/api/bff/access/resources' && request.method === 'GET') {
+    return send(response, 200, [{ id: 'res_e2e_001', name: 'Fixture API' }])
+  }
+
+  if (path === '/api/bff/access/resources' && request.method === 'POST') {
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => send(response, 200, JSON.parse(raw || '{}')))
+    return
+  }
+
   if (path === '/api/bff/access/simulate2' && request.method === 'POST') {
     return send(response, 200, { decision: 'deny' })
   }

@@ -1261,6 +1261,74 @@ pub async fn session_detail(
     }
 }
 
+/// GET/POST /api/bff/access/resources — manage Patroclus resources.
+pub async fn resources_list(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let token = svc_env(&state, "PATROCLUS_ADMIN_TOKEN");
+    match backend_get(
+        &state,
+        format!("{}/v1/admin/resources", patroclus_url()),
+        token.as_deref(),
+    )
+    .await
+    {
+        Ok(value) => Json(value).into_response(),
+        Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("patroclus: {error}")),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct ResourceCreateRequest {
+    pub name: String,
+    #[serde(default = "default_resource_type")]
+    pub resource_type: String,
+    pub uri: String,
+    #[serde(default)]
+    pub actions: Value,
+    #[serde(default = "default_sensitivity")]
+    pub sensitivity: String,
+}
+
+fn default_resource_type() -> String {
+    "api".into()
+}
+fn default_sensitivity() -> String {
+    "medium".into()
+}
+
+pub async fn resource_create(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<ResourceCreateRequest>,
+) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let token = svc_env(&state, "PATROCLUS_ADMIN_TOKEN");
+    let payload = json!({
+        "name": body.name,
+        "resource_type": body.resource_type,
+        "uri": body.uri,
+        "actions": body.actions,
+        "sensitivity": body.sensitivity,
+        "owner_id": null,
+        "credential_config": null,
+    });
+    match backend_post(
+        &state,
+        format!("{}/v1/admin/resources", patroclus_url()),
+        token.as_deref(),
+        payload,
+    )
+    .await
+    {
+        Ok(result) => Json(result).into_response(),
+        Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("patroclus: {error}")),
+    }
+}
+
 // ── Cost (Miser) ─────────────────────────────────────────────────────────────
 
 pub async fn cost_overview(State(state): State<AppState>, headers: HeaderMap) -> Response {

@@ -7,6 +7,7 @@ export default function Access() {
   const [sessions, setSessions] = useState([])
   const [message, setMessage] = useState(null)
   const [selectedSession, setSelectedSession] = useState(null)
+  const [resources, setResources] = useState([])
   const [simulation, setSimulation] = useState({ action: 'call', resource: 'mcp/*', definition: '', result: null })
 
   useEffect(() => {
@@ -23,7 +24,23 @@ export default function Access() {
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`status ${r.status}`))))
       .then((d) => setSessions(Array.isArray(d) ? d : d.sessions ?? []))
       .catch(() => setSessions([]))
+    fetch('/api/bff/access/resources')
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error(`status ${response.status}`))))
+      .then((data) => setResources(Array.isArray(data) ? data : data.resources ?? []))
+      .catch(() => setResources([]))
   }, [])
+
+  const createResource = async (event) => {
+    event.preventDefault()
+    const form = event.currentTarget
+    const response = await fetch('/api/bff/access/resources', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: form.name.value, uri: form.uri.value, actions: ['call'] }),
+    })
+    const body = await response.json().catch(() => ({}))
+    setMessage({ ok: response.ok, text: response.ok ? `Resource ${body.name ?? body.id} created.` : body.error })
+  }
 
   const resolveApproval = async (approvalId) => {
     const approverId = window.prompt('Patroclus principal UUID:')
@@ -157,6 +174,20 @@ export default function Access() {
         <p className="text-xs text-slate-500 mt-1">Immediately rejects the supplied JTI at Patroclus.</p>
         <button className="btn btn-primary mt-3" onClick={revokeToken}>Select token</button>
       </section>
+
+      <section className="panel overflow-hidden" data-testid="resource-list">
+        <div className="px-4 py-3 border-b border-[#232833]"><span className="label">Protected resources</span></div>
+        {resources.length ? resources.map((resource) => (
+          <div key={resource.id} className="px-4 py-2 border-t border-[#232833]/60 text-sm text-slate-300">{resource.name}</div>
+        )) : <div className="p-6 text-sm text-slate-600">No resources registered.</div>}
+      </section>
+
+      <form className="panel p-5 space-y-3" onSubmit={createResource}>
+        <h2 className="font-semibold">Create resource</h2>
+        <input name="name" required placeholder="resource name" />
+        <input name="uri" required placeholder="api/service/*" />
+        <button className="btn btn-primary">Create</button>
+      </form>
 
       <form className="panel p-5 space-y-3" data-testid="delegation-form" onSubmit={issueDelegation}>
         <h2 className="font-semibold">Issue delegation</h2>

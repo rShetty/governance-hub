@@ -122,6 +122,10 @@ pub fn router(state: AppState) -> Router {
             "/api/bff/access/grants/{grant_id}/revoke",
             post(bff::grant_revoke),
         )
+        .route(
+            "/api/bff/access/resources",
+            get(bff::resources_list).post(bff::resource_create),
+        )
         .route("/api/bff/cost", get(bff::cost_overview))
         .route("/api/bff/cost/keys", post(bff::miser_key_create))
         .route(
