@@ -46,7 +46,8 @@ test('Install: grant button gives an agent access to a catalog server', async ({
   await page.getByRole('button', { name: 'Tools & MCP' }).click()
   await expect(page.getByTestId('mcp-table')).toBeVisible({ timeout: 30000 })
 
-  // Find the row for our server; click Grant and answer the prompt with our agent id
+  // Search for our server to bring it to page 1
+  await page.getByTestId('mcp-search').fill(`ilmcp-${utag()}`)
   const row = page.locator('tr', { hasText: `ilmcp-${utag()}` }).first()
   await expect(row).toBeVisible({ timeout: 15000 })
   const grantResponse = page.waitForResponse((response) =>
@@ -67,18 +68,17 @@ test('Install: “Who has it?” lists agents with access', async ({ page }) => 
   const { agentId, serverId } = await createAgentAndServer(page)
   const uniqueTag = `ilmcp-${utag()}`
 
-  // Grant first via the console API (setup) — this is what the UI button does.
-  const grant = await page.request.post(`${BASE}/api/bff/mcp/${serverId}/grant`, {
+  const grant = await page.request.post(`/api/bff/mcp/${serverId}/grant`, {
     data: { agent_ids: [agentId] },
   })
 
   await page.getByRole('button', { name: 'Tools & MCP' }).click()
   await expect(page.getByTestId('mcp-table')).toBeVisible({ timeout: 30000 })
 
+  // Search for the server to bring it to the current page
+  await page.getByTestId('mcp-search').fill(uniqueTag)
   const row = page.locator('tr', { hasText: uniqueTag }).first()
   await expect(row).toBeVisible({ timeout: 15000 })
-  const allNames = await page.locator('[data-testid="mcp-table"] tbody tr td:first-child').allTextContents()
-  console.log('DBG rows:', allNames.length, '| our tag in rows:', allNames.some(n => n.includes(uniqueTag)))
   await row.getByRole('button', { name: 'Who has it?' }).click()
 
   await expect(page.getByTestId('access-list')).toBeVisible({ timeout: 15000 })

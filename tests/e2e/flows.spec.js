@@ -89,6 +89,7 @@ test('MCP: register server → grant to agent → visible in catalogue', async (
 
   // UI: Tools view shows the MCP catalogue with our server present.
   await page.getByRole('button', { name: 'Tools & MCP' }).click()
+  await page.getByTestId('mcp-search').fill(`flow-mcp-${runId}`)
   await expect(page.getByText(`flow-mcp-${runId}`).first()).toBeVisible({ timeout: 15000 })
 })
 

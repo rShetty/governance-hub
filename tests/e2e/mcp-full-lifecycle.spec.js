@@ -73,6 +73,7 @@ test('MCP full lifecycle: install wizard → grant → policy → verify access 
 
   // ── STEP 6: Verify catalog shows server with authorized agents ──
   await page.getByRole('button', { name: 'Tools & MCP' }).click()
+  await page.getByTestId('mcp-search').fill(serverName)
   await expect(page.getByText(serverName).first()).toBeVisible({ timeout: 10000 })
 
   const row = page.locator('tr', { hasText: serverName }).first()

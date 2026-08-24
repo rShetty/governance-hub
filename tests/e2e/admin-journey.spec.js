@@ -14,7 +14,7 @@ test('Admin signs in and completes the governance onboarding journey', async ({ 
   await page.getByTestId('install-mcp-btn').click()
   await page.getByTestId('wiz-name').fill('journey-mcp')
   await page.getByTestId('wiz-url').fill('https://mcp.example.test/sse')
-  await page.getByText('Next →').click()
+  await page.getByTestId('wiz-next-1').click()
   await page.getByTestId('wiz-install-btn').click()
   await expect(page.getByTestId('wiz-installed-ok')).toBeVisible({ timeout: 10000 })
   await page.getByTestId('wiz-next-2').click()

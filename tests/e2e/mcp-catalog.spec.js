@@ -20,7 +20,7 @@ test('MCP catalog: register a new server through the install wizard', async ({ p
   await expect(page.getByTestId('install-wizard')).toBeVisible()
   await page.getByTestId('wiz-name').fill(name)
   await page.getByTestId('wiz-url').fill('https://example.com/sse')
-  await page.getByText('Next →').click()
+  await page.getByTestId('wiz-next-1').click()
   await page.getByTestId('wiz-install-btn').click()
   await expect(page.getByTestId('wiz-installed-ok')).toBeVisible({ timeout: 10000 })
   await page.getByTestId('wiz-next-2').click()
@@ -37,7 +37,7 @@ test('MCP catalog: registration persists across reload', async ({ page }) => {
   await expect(page.getByTestId('install-wizard')).toBeVisible()
   await page.getByTestId('wiz-name').fill(name)
   await page.getByTestId('wiz-url').fill('https://example.com/sse')
-  await page.getByText('Next →').click()
+  await page.getByTestId('wiz-next-1').click()
   await page.getByTestId('wiz-install-btn').click()
   await expect(page.getByTestId('wiz-installed-ok')).toBeVisible({ timeout: 10000 })
   await page.getByTestId('wiz-next-2').click()
@@ -47,6 +47,7 @@ test('MCP catalog: registration persists across reload', async ({ page }) => {
   await expect(page.getByText(name).first()).toBeVisible({ timeout: 10000 })
   await page.goto(`${BASE}`, { waitUntil: 'domcontentloaded' })
   await page.getByRole('button', { name: 'Tools & MCP' }).click()
+  await page.getByTestId('mcp-search').fill(name)
   await expect(page.getByText(name).first()).toBeVisible({ timeout: 15000 })
 })
 
@@ -54,7 +55,7 @@ test('MCP catalog: wizard requires name and URL before Next', async ({ page }) =
   await page.getByRole('button', { name: 'Tools & MCP' }).click()
   await page.getByTestId('install-mcp-btn').click()
   await expect(page.getByTestId('install-wizard')).toBeVisible()
-  const nextBtn = page.getByText('Next →')
+  const nextBtn = page.getByTestId('wiz-next-1')
   await expect(nextBtn).toBeDisabled()
 })
 
@@ -77,6 +78,8 @@ test('MCP catalog: association with agent works end-to-end', async ({ page }) =>
   expect(grant.status()).toBe(200)
   const access = await api.get(`/api/bff/mcp/${serverId}/access`)
   expect((await access.json()).agents).toContain(agentId)
+
   await page.getByRole('button', { name: 'Tools & MCP' }).click()
+  await page.getByTestId('mcp-search').fill(mcpName)
   await expect(page.getByText(mcpName).first()).toBeVisible({ timeout: 15000 })
 })

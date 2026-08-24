@@ -314,6 +314,8 @@ function McpList({ extra = [] }) {
   const [accessFor, setAccessFor] = useState(null) // server_id being inspected
   const [access, setAccess] = useState([])
   const [busy, setBusy] = useState('')
+  const [page, setPage] = useState(0)
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     fetch('/api/bff/mcp')
@@ -323,6 +325,19 @@ function McpList({ extra = [] }) {
   }, [extra.length])
 
   const all = [...extra, ...(Array.isArray(list) ? list : [])]
+  const filtered = all.filter((m) => {
+    if (!search) return true
+    const q = search.toLowerCase()
+    return (
+      (m.name ?? '').toLowerCase().includes(q) ||
+      (m.url ?? '').toLowerCase().includes(q) ||
+      (m.description ?? '').toLowerCase().includes(q)
+    )
+  })
+  const PAGE_SIZE = 20
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages - 1)
+  const paged = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE)
 
   const grantToAgent = async (serverId) => {
     const agentId = prompt('Agent ID to grant access:')
@@ -388,10 +403,21 @@ function McpList({ extra = [] }) {
 
   return (
     <div>
+      {/* Search bar */}
+      <div className="px-4 py-3 border-b border-[#232833] flex items-center gap-3">
+        <input
+          data-testid="mcp-search"
+          placeholder="Search by name, URL, or description…"
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(0) }}
+          className="flex-1 px-3 py-1.5 rounded-lg bg-[#0a0c10] border border-[#232833] text-[13px] text-slate-200 focus:outline-none focus:border-teal-500"
+        />
+        <span className="num text-xs text-slate-600">{filtered.length} servers</span>
+      </div>
       <table className="data" data-testid="mcp-table">
         <thead><tr><th>Name</th><th>Transport</th><th>URL</th><th>Install</th></tr></thead>
         <tbody>
-          {all.map((m, i) => (
+          {paged.map((m, i) => (
             <tr key={m.id ?? i}>
               <td className="text-slate-200">
                 {m.name}
@@ -428,6 +454,29 @@ function McpList({ extra = [] }) {
         </div>
       )}
       {busy && <div className="p-2 text-[11px] text-slate-500 num">working: {busy}…</div>}
+
+      {/* Pagination controls */}
+      {totalPages > 1 && (
+        <div className="px-4 py-2.5 border-t border-[#232833] flex items-center justify-between" data-testid="mcp-pagination">
+          <span className="text-xs text-slate-500 num">
+            Page {safePage + 1} of {totalPages} · {filtered.length} total
+          </span>
+          <div className="flex gap-1.5">
+            <button
+              className="btn btn-ghost !py-1 !px-2 !text-[11px]"
+              disabled={safePage === 0}
+              onClick={() => setPage(safePage - 1)}
+              data-testid="mcp-page-prev"
+            >← Prev</button>
+            <button
+              className="btn btn-ghost !py-1 !px-2 !text-[11px]"
+              disabled={safePage >= totalPages - 1}
+              onClick={() => setPage(safePage + 1)}
+              data-testid="mcp-page-next"
+            >Next →</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
