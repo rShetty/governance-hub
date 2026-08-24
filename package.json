@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "test:e2e:local": "playwright test --config=playwright.local.config.js",
+    "test:services": "playwright test --config=playwright.live.config.js",
+    "test:services:required": "LIVE_REQUIRED=1 playwright test --config=playwright.live.config.js",
+    "services:start": "./scripts/start-local-services.sh",
     "dev": "vite",
     "build": "vite build"
   },

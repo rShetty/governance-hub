@@ -148,5 +148,6 @@ flow can be exercised end to end.
 3. `cargo clippy --all-targets -- -D warnings`
 4. Frontend production build
 5. Local Playwright suite against fixtures/stubs
-6. Real-service smoke tests when services are available
+6. Real-service smoke tests (`npm run test:services`); use
+   `LIVE_REQUIRED=1 npm run test:services` when all services must be running.
 7. Focused commit and push
