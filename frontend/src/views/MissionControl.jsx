@@ -60,7 +60,7 @@ export default function MissionControl() {
         <div className="panel p-5 flex flex-col justify-between min-h-[124px]">
           <div className="label mb-2">Backends up</div>
           <div>
-            <div className="num text-[32px] leading-none text-slate-100">{services ? up : '—'}<span className="text-slate-600 text-lg">/{list.length || 0}</span></div>
+          <div className="num text-[32px] leading-none text-slate-100">{services ? `${up}/${list.length}` : '—'}</div>
             <div className="text-xs text-slate-600 mt-2">live fleet health</div>
           </div>
         </div>

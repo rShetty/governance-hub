@@ -1,7 +1,7 @@
 const BASE = import.meta.env.VITE_HUB_API ?? ''
 
 export async function fetchServices() {
-  const r = await fetch(`${BASE}/api/services`)
+  const r = await fetch(`${BASE}/api/services`, { credentials: 'same-origin' })
   if (!r.ok) throw new Error(`services: ${r.status}`)
   return r.json()
 }
@@ -13,6 +13,7 @@ export async function fetchServices() {
 export async function svcGet(serviceId, path = '') {
   const r = await fetch(
     `${BASE}/api/svc/${serviceId}${path.startsWith('/') ? path : '/' + path}`,
+    { credentials: 'same-origin' },
   )
   if (!r.ok) {
     const body = await r.text().catch(() => '')
@@ -34,7 +35,7 @@ export const fmtUsd = (n) =>
 // ---- Console: auth + administration ----
 
 export async function me() {
-  const r = await fetch(`${BASE}/api/me`)
+  const r = await fetch(`${BASE}/api/me`, { credentials: 'same-origin' })
   if (r.status === 401) return null
   if (!r.ok) throw new Error(`me: ${r.status}`)
   return r.json()
@@ -46,7 +47,7 @@ export function loginUrl(next = '/') {
 export const logoutUrl = `${BASE}/logout`
 
 export async function identities() {
-  const r = await fetch(`${BASE}/api/console/identities`)
+  const r = await fetch(`${BASE}/api/console/identities`, { credentials: 'same-origin' })
   if (!r.ok) throw new Error(`identities: ${r.status}`)
   return r.json()
 }
