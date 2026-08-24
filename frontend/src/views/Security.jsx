@@ -63,6 +63,24 @@ export default function Security() {
     })
   }
 
+  const createRemediation = async (event) => {
+    event.preventDefault()
+    const form = event.currentTarget
+    const response = await fetch('/api/bff/risk/remediations', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        subject: form.subject.value,
+        title: form.title.value,
+        owner: form.owner.value,
+        status: 'open',
+        notes: form.notes.value,
+      }),
+    })
+    const body = await response.json().catch(() => ({}))
+    setMessage({ ok: response.ok, text: response.ok ? `Remediation ${body.id} assigned to ${body.owner}.` : body.error || `status ${response.status}` })
+  }
+
   const stats = data.stats ?? {}
   const dlp = Array.isArray(data.dlp) ? data.dlp : []
   const soc2 = data.soc2 ?? {}
@@ -126,6 +144,16 @@ export default function Security() {
             <input data-testid="contain-agent" name="agent_id" required placeholder="agent id" />
             <input data-testid="contain-reason" name="reason" required placeholder="reason" />
             <button className="btn btn-danger" data-testid="contain-submit">Contain</button>
+          </form>
+        </Panel>
+
+        <Panel title="Remediation ownership" subtitle="Assign risk remediation to an accountable owner">
+          <form className="space-y-2" onSubmit={createRemediation} data-testid="remediation-form">
+            <input name="subject" required placeholder="subject / agent id" />
+            <input name="title" required placeholder="action required" />
+            <input name="owner" required placeholder="owner email" />
+            <textarea name="notes" rows="3" placeholder="notes"></textarea>
+            <button className="btn btn-primary" data-testid="remediation-submit">Create</button>
           </form>
         </Panel>
 

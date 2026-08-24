@@ -128,7 +128,7 @@ flow can be exercised end to end.
 - [x] Geo policy/check visibility.
 - [x] Agent attestation/verification flows.
 - [x] Containment workflow for failed attestations.
-- [ ] Remediation ownership/status.
+- [x] Remediation ownership/status.
 - [x] Report/evidence export.
 - [~] Cover risk workflows through local Playwright.
 

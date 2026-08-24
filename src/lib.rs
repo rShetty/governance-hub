@@ -142,6 +142,7 @@ pub fn router(state: AppState) -> Router {
             get(bff::destination_policies).post(bff::destination_policy_create),
         )
         .route("/api/bff/risk/contain", post(bff::risk_contain))
+        .route("/api/bff/risk/remediations", post(bff::remediation_create))
         .route("/api/bff/tools", get(bff::tools_overview))
         .route("/api/bff/catalog", get(bff::unified_catalog))
         .route(

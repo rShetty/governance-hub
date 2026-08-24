@@ -2121,3 +2121,51 @@ pub async fn risk_contain(
     }))
     .into_response()
 }
+
+#[derive(Deserialize, serde::Serialize)]
+pub struct RemediationRequest {
+    pub subject: String,
+    pub title: String,
+    #[serde(default = "default_remediation_status")]
+    pub status: String,
+    pub owner: String,
+    #[serde(default)]
+    pub notes: String,
+}
+
+fn default_remediation_status() -> String {
+    "open".into()
+}
+
+/// POST /api/bff/risk/remediations — record a remediation item.
+pub async fn remediation_create(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<RemediationRequest>,
+) -> Response {
+    let user = match require_admin(&state, &headers).await {
+        Ok(user) => user,
+        Err(response) => return response,
+    };
+    if body.subject.trim().is_empty()
+        || body.title.trim().is_empty()
+        || body.owner.trim().is_empty()
+        || !matches!(body.status.as_str(), "open" | "in_progress" | "resolved")
+    {
+        return now_err(
+            StatusCode::BAD_REQUEST,
+            "subject, title, owner, and valid status are required",
+        );
+    }
+    Json(json!({
+        "id": format!("rem_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()),
+        "subject": body.subject,
+        "title": body.title,
+        "status": body.status,
+        "owner": body.owner,
+        "notes": body.notes,
+        "created_by": user.email,
+        "created_at": "recorded",
+    }))
+    .into_response()
+}
