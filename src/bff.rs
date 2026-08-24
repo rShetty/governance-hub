@@ -903,6 +903,60 @@ fn default_limit() -> u32 {
     25
 }
 
+fn canonical_event(source: &str, kind: Value, summary: Value, ts: Value, raw: Value) -> Value {
+    let severity =
+        raw.get("severity")
+            .cloned()
+            .unwrap_or_else(|| match kind.as_str().unwrap_or_default() {
+                value
+                    if value.contains("violation")
+                        || value.contains("blocked")
+                        || value.contains("revoked") =>
+                {
+                    json!("critical")
+                }
+                value if value.contains("denied") || value.contains("failed") => json!("high"),
+                _ => json!("info"),
+            });
+    let actor = raw
+        .get("actor")
+        .or_else(|| raw.get("owner"))
+        .or_else(|| raw.get("agent_id"))
+        .or_else(|| raw.get("user_id"))
+        .cloned()
+        .unwrap_or(json!(null));
+    let resource = raw
+        .get("resource")
+        .or_else(|| raw.get("domain"))
+        .or_else(|| raw.get("target"))
+        .or_else(|| raw.get("destination"))
+        .cloned()
+        .unwrap_or(json!(null));
+    let session_id = raw
+        .get("session_id")
+        .or_else(|| raw.get("sessionId"))
+        .cloned()
+        .unwrap_or(json!(null));
+    json!({
+        "schema": "governance.event.v1",
+        "id": format!("{source}:{}", crypto_digest(&raw.to_string())),
+        "ts": ts,
+        "source": source,
+        "kind": kind,
+        "severity": severity,
+        "actor": actor,
+        "session_id": session_id,
+        "resource": resource,
+        "summary": summary,
+        "raw": raw,
+    })
+}
+
+fn crypto_digest(input: &str) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{:x}", Sha256::digest(input.as_bytes()))
+}
+
 fn activity_matches(item: &Value, q: &PageQuery) -> bool {
     let contains = |field: &str, filter: &Option<String>| {
         filter.as_deref().is_none_or(|wanted| {
@@ -914,22 +968,10 @@ fn activity_matches(item: &Value, q: &PageQuery) -> bool {
         })
     };
     contains("source", &q.source)
-        && (q.actor.is_none()
-            || item["raw"]
-                .to_string()
-                .to_lowercase()
-                .contains(&q.actor.as_deref().unwrap_or_default().to_lowercase()))
-        && (q.session_id.is_none()
-            || item["raw"]
-                .to_string()
-                .to_lowercase()
-                .contains(&q.session_id.as_deref().unwrap_or_default().to_lowercase()))
-        && (q.resource.is_none() || contains("summary", &q.resource))
-        && (q.severity.is_none()
-            || item["raw"]
-                .to_string()
-                .to_lowercase()
-                .contains(&q.severity.as_deref().unwrap_or_default().to_lowercase()))
+        && contains("actor", &q.actor)
+        && contains("session_id", &q.session_id)
+        && contains("resource", &q.resource)
+        && contains("severity", &q.severity)
 }
 
 pub async fn activity_feed(
@@ -975,50 +1017,64 @@ pub async fn activity_feed(
 
     let (pa, mi, hi) = tokio::join!(pa, mi, hi);
 
-    // Normalize into one timeline shape: {ts, source, kind, summary}
     let mut items: Vec<Value> = Vec::new();
     if let Ok(Value::Array(list)) = ev {
         for e in list {
-            items.push(json!({
-                "source": "sentiel",
-                "kind": e.get("event_type").cloned().unwrap_or(json!("event")),
-                "summary": e.get("summary").cloned().unwrap_or(json!(null)),
-                "ts": e.get("created_at").cloned().unwrap_or(json!(null)),
-                "raw": e,
-            }));
+            items.push(canonical_event(
+                "sentiel",
+                e.get("event_type").cloned().unwrap_or(json!("event")),
+                e.get("summary").cloned().unwrap_or(json!(null)),
+                e.get("created_at").cloned().unwrap_or(json!(null)),
+                e,
+            ));
         }
     }
     if let Ok(Value::Array(list)) = vg {
         for v in list {
-            items.push(json!({
-                    "source": "aegis",
-                    "kind": v.get("action").cloned().unwrap_or(json!("egress")),
-                    "summary": v.get("domain").cloned().unwrap_or(json!(null)),
-                    "ts": v.get("logged_at").cloned().unwrap_or(json!(null)),
-                    "raw": v,
-            }));
+            items.push(canonical_event(
+                "aegis",
+                v.get("action").cloned().unwrap_or(json!("egress")),
+                v.get("domain").cloned().unwrap_or(json!(null)),
+                v.get("logged_at").cloned().unwrap_or(json!(null)),
+                v,
+            ));
         }
         if let Ok(Value::Array(list)) = pa {
             for entry in list {
-                items.push(json!({
-                "source": "patroclus",
-                "kind": entry.get("action").cloned().unwrap_or(json!("authorization")),
-                "summary": entry.get("resource").cloned().unwrap_or(entry.get("target").cloned().unwrap_or(json!(null))),
-                "ts": entry.get("timestamp").cloned().unwrap_or(json!(null)),
-                "raw": entry,
-            }));
+                items.push(canonical_event(
+                    "patroclus",
+                    entry
+                        .get("action")
+                        .cloned()
+                        .unwrap_or(json!("authorization")),
+                    entry
+                        .get("resource")
+                        .cloned()
+                        .unwrap_or(entry.get("target").cloned().unwrap_or(json!(null))),
+                    entry.get("timestamp").cloned().unwrap_or(json!(null)),
+                    entry,
+                ));
             }
         }
         if let Ok(Value::Object(object)) = mi {
             if let Some(Value::Array(keys)) = object.get("keys") {
                 for key in keys {
-                    items.push(json!({
-                    "source": "miser",
-                    "kind": if key.get("active").and_then(Value::as_bool).unwrap_or(true) { "key.active" } else { "key.revoked" },
-                    "summary": key.get("owner").cloned().unwrap_or(json!(null)),
-                    "ts": key.get("created_at").cloned().map(|value| value.to_string()).unwrap_or_default(),
-                    "raw": key,
-                }));
+                    let kind = if key.get("active").and_then(Value::as_bool).unwrap_or(true) {
+                        json!("key.active")
+                    } else {
+                        json!("key.revoked")
+                    };
+                    items.push(canonical_event(
+                        "miser",
+                        kind,
+                        key.get("owner").cloned().unwrap_or(json!(null)),
+                        json!(key
+                            .get("created_at")
+                            .cloned()
+                            .map(|value| value.to_string())
+                            .unwrap_or_default()),
+                        key.clone(),
+                    ));
                 }
             }
         }
@@ -1031,13 +1087,13 @@ pub async fn activity_feed(
                     .unwrap_or_default()
             });
             for agent in agents {
-                items.push(json!({
-                    "source": "hive",
-                    "kind": "agent.registered",
-                    "summary": agent.get("name").cloned().unwrap_or(json!(null)),
-                    "ts": agent.get("created_at").cloned().unwrap_or(json!(null)),
-                    "raw": agent,
-                }));
+                items.push(canonical_event(
+                    "hive",
+                    json!("agent.registered"),
+                    agent.get("name").cloned().unwrap_or(json!(null)),
+                    agent.get("created_at").cloned().unwrap_or(json!(null)),
+                    agent,
+                ));
             }
         }
     }
@@ -1050,8 +1106,13 @@ pub async fn activity_feed(
         .into_iter()
         .filter(|item| activity_matches(item, &q))
         .collect::<Vec<_>>();
-    Json(json!({ "items": filtered.into_iter().take(q.limit as usize * 2).collect::<Vec<_>>() }))
-        .into_response()
+    let total = filtered.len();
+    Json(json!({
+        "schema": "governance.activity.v1",
+        "items": filtered.into_iter().take(q.limit as usize * 2).collect::<Vec<_>>(),
+        "total": total,
+    }))
+    .into_response()
 }
 
 /// GET /api/bff/trace/{session_id} — correlated cross-service trace.

@@ -261,14 +261,25 @@ const server = http.createServer(async (request, response) => {
 
   if (path === '/api/bff/activity') {
     const source = new URL(request.url, 'http://localhost').searchParams.get('source')
-    return send(response, 200, {
-      items: [
+    const all = [
         { source: 'patroclus', kind: 'policy.evaluate', summary: 'mcp/github', ts: new Date().toISOString() },
         { source: 'miser', kind: 'key.active', summary: 'playwright-agent', ts: new Date().toISOString() },
         { source: 'hive', kind: 'agent.registered', summary: 'fixture-agent', ts: new Date().toISOString() },
         { source: 'sentiel', kind: 'dlp.violation', summary: 'API key pattern', ts: new Date().toISOString() },
         { source: 'aegis', kind: 'egress.block', summary: 'evil.example.test', ts: new Date().toISOString() },
-      ].filter(item => !source || item.source === source),
+    ]
+    return send(response, 200, {
+      schema: 'governance.activity.v1',
+      total: all.length,
+      items: all.filter(item => !source || item.source === source).map((item, index) => ({
+        schema: 'governance.event.v1',
+        id: `${item.source}-${index}`,
+        severity: item.kind.includes('violation') || item.kind.includes('blocked') ? 'critical' : 'info',
+        actor: item.summary,
+        session_id: item.source === 'patroclus' ? 'session-e2e' : null,
+        resource: item.summary,
+        ...item,
+      })),
     })
   }
 
