@@ -127,7 +127,7 @@ flow can be exercised end to end.
 - [x] Aegis destination policy management.
 - [x] Geo policy/check visibility.
 - [x] Agent attestation/verification flows.
-- [ ] Containment workflow for failed attestations.
+- [x] Containment workflow for failed attestations.
 - [ ] Remediation ownership/status.
 - [x] Report/evidence export.
 - [~] Cover risk workflows through local Playwright.

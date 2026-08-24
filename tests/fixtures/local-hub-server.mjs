@@ -348,6 +348,20 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
+  if (path === '/api/bff/risk/contain' && request.method === 'POST') {
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      send(response, body.agent_id && body.reason ? 200 : 400, {
+        contained: !!(body.agent_id && body.reason),
+        operator: 'e2e@governance.test',
+        backends: { argus: { success: true }, patroclus: { success: true } },
+      })
+    })
+    return
+  }
+
   if (path === '/api/bff/catalog') {
     return send(response, 200, {
       total: 2,

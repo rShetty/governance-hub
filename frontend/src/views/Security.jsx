@@ -47,6 +47,22 @@ export default function Security() {
     })
   }
 
+  const containAgent = async (event) => {
+    event.preventDefault()
+    const form = event.currentTarget
+    if (!window.confirm(`Contain ${form.agent_id.value}? This revokes identity and kills sessions.`)) return
+    const response = await fetch('/api/bff/risk/contain', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ agent_id: form.agent_id.value, reason: form.reason.value }),
+    })
+    const body = await response.json().catch(() => ({}))
+    setMessage({
+      ok: response.ok && body.contained === true,
+      text: response.ok ? `Contained ${form.agent_id.value}.` : body.error || `status ${response.status}`,
+    })
+  }
+
   const stats = data.stats ?? {}
   const dlp = Array.isArray(data.dlp) ? data.dlp : []
   const soc2 = data.soc2 ?? {}
@@ -102,6 +118,14 @@ export default function Security() {
           <form className="space-y-2" onSubmit={checkGeo}>
             <input data-testid="geo-destination" name="destination" required placeholder="api.example.test" />
             <button className="btn btn-primary" data-testid="check-geo">Check</button>
+          </form>
+        </Panel>
+
+        <Panel title="Failed-attestation containment" subtitle="Emergency revoke and emergency stop">
+          <form className="space-y-2" onSubmit={containAgent}>
+            <input data-testid="contain-agent" name="agent_id" required placeholder="agent id" />
+            <input data-testid="contain-reason" name="reason" required placeholder="reason" />
+            <button className="btn btn-danger" data-testid="contain-submit">Contain</button>
           </form>
         </Panel>
 

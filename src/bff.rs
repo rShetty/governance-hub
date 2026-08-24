@@ -2044,3 +2044,80 @@ pub async fn destination_policy_create(
         Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("aegis: {error}")),
     }
 }
+
+#[derive(Deserialize)]
+pub struct ContainmentRequest {
+    pub agent_id: String,
+    #[serde(default)]
+    pub reason: String,
+}
+
+/// POST /api/bff/risk/contain — failed-attestation containment.
+pub async fn risk_contain(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<ContainmentRequest>,
+) -> Response {
+    let user = match require_admin(&state, &headers).await {
+        Ok(user) => user,
+        Err(response) => return response,
+    };
+    if body.agent_id.trim().is_empty() || body.reason.trim().is_empty() {
+        return now_err(StatusCode::BAD_REQUEST, "agent_id and reason are required");
+    }
+
+    let issuer = state.config.oidc_issuer.clone().unwrap_or_default();
+    let credentials = format!(
+        "{}:{}",
+        state.config.oidc_client_id.as_deref().unwrap_or(""),
+        state.config.oidc_client_secret.as_deref().unwrap_or("")
+    );
+    use base64::Engine as _;
+    let authorization = format!(
+        "Basic {}",
+        base64::engine::general_purpose::STANDARD.encode(credentials)
+    );
+
+    let argus_url = format!("{issuer}/api/admin/agents/{}/revoke", body.agent_id);
+    let argus_request = state
+        .client
+        .post(argus_url)
+        .header(header::AUTHORIZATION, authorization)
+        .json(&json!({
+            "status": "revoked",
+            "reason": body.reason,
+            "operator": user.email,
+        }))
+        .timeout(std::time::Duration::from_secs(10));
+
+    let patroclus_token = svc_env(&state, "PATROCLUS_ADMIN_TOKEN");
+    let patroclus_result = backend_post(
+        &state,
+        format!("{}/v1/admin/agents/{}/kill", patroclus_url(), body.agent_id),
+        patroclus_token.as_deref(),
+        json!({
+            "reason": body.reason,
+            "operator": user.email,
+            "initiated_by": "governance-hub"
+        }),
+    )
+    .await;
+
+    let argus_response = argus_request.send().await;
+    let argus_ok = argus_response
+        .as_ref()
+        .map(|response| response.status().is_success())
+        .unwrap_or(false);
+    let patroclus_ok = patroclus_result.is_ok();
+
+    Json(json!({
+        "agent_id": body.agent_id,
+        "operator": user.email,
+        "contained": argus_ok && patroclus_ok,
+        "backends": {
+            "argus": { "success": argus_ok },
+            "patroclus": { "success": patroclus_ok },
+        }
+    }))
+    .into_response()
+}
