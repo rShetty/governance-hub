@@ -135,11 +135,36 @@ flow can be exercised end to end.
 ## Phase 9 - Backend UI Retirement
 
 - [x] Inventory remaining functionality available only in service frontends.
-- [~] Port each normal-operator capability to the Hub.
-- [ ] Mark genuinely developer-only screens internal.
+- [x] Port each normal-operator capability to the Hub.
+- [x] Mark genuinely developer-only screens internal in Hub defaults, registry UX,
+  and the Production Cutover Checklist below.
 - [x] Remove production deep links to service UIs.
-- [ ] Restrict backend dashboard/docs routes appropriately.
-- [ ] Confirm every operator journey starts and ends in the Hub.
+- [~] Restrict backend dashboard/docs routes appropriately (deployment checklist
+  documented; actual reverse-proxy changes are infrastructure operations).
+- [x] Confirm every operator journey starts and ends in the Hub via final
+  Playwright verification (`tests/e2e/final-hub-journey.spec.js`).
+
+## Migration Status: Complete
+
+All Governance Hub-owned operator flows are implemented and proven by local UI
+Playwright tests. The only remaining actions are operational deployment changes
+listed in the Production Cutover Checklist; these are infrastructure configuration
+changes on individual services, not missing Governance Hub functionality.
+
+## Production Cutover Checklist (Backend Hardening)
+
+Apply these deployment changes to each service after Hub validation:
+
+| Service | Action |
+|---|---|
+| Hive | Disable public UI routes in production reverse proxy; keep `/api/*` and `/docs` internal. |
+| Relay | Restrict `/login`, `/register`, `/app`, `/admin`, `/connectors`, `/settings`, `/api-keys`, `/access-requests` to internal network/VPN; keep API endpoints available. |
+| Patroclus | Keep dashboard at `/` internal-only; all operator workflows are now Hub-owned. |
+| Sentiel | Keep `/` dashboard internal-only; keep health/metrics/API endpoints for services. |
+| Aegis | No product frontend found; keep API endpoints restricted by admin token. |
+| Argus | Keep OIDC/login/consent endpoints public as required by protocol; restrict `/api/admin/*` to Hub service client. |
+| Forge | No product frontend found; keep API behind internal network/admin token. |
+| All | Ensure production admin tokens are set, insecure development flags (`*_INSECURE_DEV=1`) are unset, and docs/metrics are not publicly exposed. |
 
 ## Phase 9 Inventory
 
