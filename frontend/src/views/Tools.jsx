@@ -52,6 +52,8 @@ export default function Tools() {
   const [healthMessage, setHealthMessage] = useState(null)
   const [wizardOpen, setWizardOpen] = useState(false)
   const [extra, setExtra] = useState([])
+  const [catalogPage, setCatalogPage] = useState(0)
+  const [catalogSearch, setCatalogSearch] = useState('')
   const [invocation, setInvocation] = useState({ action: 'call', resource: 'mcp/github', definition: '', preview: null, result: null })
 
   const runAuthorizationPreview = async () => {
@@ -81,6 +83,19 @@ export default function Tools() {
   }
 
   const tools = Array.isArray(bff.data?.tools) ? bff.data.tools : []
+  const catalogItems = catalog.data?.items ?? []
+  const filteredCatalog = catalogItems.filter((item) => {
+    if (!catalogSearch) return true
+    const q = catalogSearch.toLowerCase()
+    return (
+      (item.name ?? '').toLowerCase().includes(q) ||
+      (item.source ?? '').toLowerCase().includes(q) ||
+      (item.kind ?? '').toLowerCase().includes(q)
+    )
+  })
+  const catalogTotalPages = Math.max(1, Math.ceil(filteredCatalog.length / CATALOG_PAGE_SIZE))
+  const catalogSafePage = Math.min(catalogPage, catalogTotalPages - 1)
+  const pagedCatalog = filteredCatalog.slice(catalogSafePage * CATALOG_PAGE_SIZE, (catalogSafePage + 1) * CATALOG_PAGE_SIZE)
 
   return (
     <div className="space-y-6">
@@ -98,16 +113,28 @@ export default function Tools() {
           <span className="label">Unified capability catalog</span>
           <span className="num text-xs text-slate-600">{catalog.data?.total ?? 0}</span>
         </div>
+        {catalog.data?.items?.length > 0 && (
+          <div className="px-4 py-3 border-b border-[#232833] flex items-center gap-3">
+            <input
+              data-testid="catalog-search"
+              placeholder="Search capabilities…"
+              value={catalogSearch}
+              onChange={(e) => { setCatalogSearch(e.target.value); setCatalogPage(0) }}
+              className="flex-1 px-3 py-1.5 rounded-lg bg-[#0a0c10] border border-[#232833] text-[13px] text-slate-200 focus:outline-none focus:border-teal-500"
+            />
+            <span className="num text-xs text-slate-600">{filteredCatalog.length} results</span>
+          </div>
+        )}
         {catalog.err && <div className="p-4 text-sm text-amber-300">{catalog.err}</div>}
         {!catalog.err && !catalog.data && <div className="p-4 text-sm text-slate-600">Loading…</div>}
         {catalog.data && !catalog.data.items.length && (
           <div className="p-8 text-center text-sm text-slate-600" data-testid="catalog-empty">No capabilities registered.</div>
         )}
-        {catalog.data?.items?.length > 0 && (
+        {filteredCatalog.length > 0 && (
           <table className="data" data-testid="catalog-table">
             <thead><tr><th>Capability</th><th>Source</th><th>Kind</th><th>Status</th><th>OAuth</th><th>Health</th><th>Authorized agents</th><th>Lifecycle</th></tr></thead>
             <tbody>
-              {catalog.data.items.map((item, index) => (
+              {pagedCatalog.map((item, index) => (
                 <tr key={`${item.source}-${item.kind}-${item.id}-${index}`} data-testid={`catalog-${item.source}-${item.kind}`}>
                   <td className="text-slate-200">{String(item.name)}</td>
                   <td><span className="badge badge-mono !text-[10px]">{item.source}</span></td>
@@ -144,6 +171,29 @@ export default function Tools() {
               ))}
             </tbody>
           </table>
+        )}
+
+        {/* Catalog pagination */}
+        {catalogTotalPages > 1 && (
+          <div className="px-4 py-2.5 border-t border-[#232833] flex items-center justify-between" data-testid="catalog-pagination">
+            <span className="text-xs text-slate-500 num">
+              Page {catalogSafePage + 1} of {catalogTotalPages} · {filteredCatalog.length} total
+            </span>
+            <div className="flex gap-1.5">
+              <button
+                className="btn btn-ghost !py-1 !px-2 !text-[11px]"
+                disabled={catalogSafePage === 0}
+                onClick={() => setCatalogPage(catalogSafePage - 1)}
+                data-testid="catalog-page-prev"
+              >← Prev</button>
+              <button
+                className="btn btn-ghost !py-1 !px-2 !text-[11px]"
+                disabled={catalogSafePage >= catalogTotalPages - 1}
+                onClick={() => setCatalogPage(catalogSafePage + 1)}
+                data-testid="catalog-page-next"
+              >Next →</button>
+            </div>
+          </div>
         )}
       </section>
       {healthMessage && <div className={healthMessage.ok ? 'text-sm text-teal-300' : 'text-sm text-rose-400'} data-testid="catalog-health-result">{healthMessage.text}</div>}
@@ -480,6 +530,8 @@ function McpList({ extra = [] }) {
     </div>
   )
 }
+
+const CATALOG_PAGE_SIZE = 20
 
 function InstallWizard({ onClose, onInstalled }) {
   const [step, setStep] = useState(1)
