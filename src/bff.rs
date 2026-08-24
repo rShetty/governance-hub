@@ -211,6 +211,41 @@ pub async fn fleet_overview(State(state): State<AppState>, headers: HeaderMap) -
     .into_response()
 }
 
+/// POST /api/bff/access/approvals/{id}/deny — deny a pending request.
+pub async fn approval_deny(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(approval_id): Path<String>,
+    Json(body): Json<AccessActionRequest>,
+) -> Response {
+    let (user, token) = match patroclus_admin(&state, &headers).await {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    if body.approver_id.trim().is_empty() {
+        return now_err(StatusCode::BAD_REQUEST, "approver_id required");
+    }
+    let url = format!(
+        "{}/v1/principal/approvals/{}/deny",
+        patroclus_url(),
+        approval_id
+    );
+    let payload = json!({
+        "approver_id": body.approver_id,
+        "reason": if body.reason.is_empty() { "Denied from Governance Hub".to_string() } else { body.reason.clone() },
+    });
+    match backend_post(&state, url, token.as_deref(), payload).await {
+        Ok(result) => Json(json!({
+            "approval_id": approval_id,
+            "decision": "denied",
+            "operator": user.email,
+            "result": result,
+        }))
+        .into_response(),
+        Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("patroclus: {error}")),
+    }
+}
+
 // ── Agents: create (Hive) + identity (Argus) bridge ─────────────────────────
 
 #[derive(Deserialize)]
@@ -2246,4 +2281,66 @@ pub async fn orchestration_create(
         Ok(result) => Json(result).into_response(),
         Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("hive: {error}")),
     }
+}
+
+/// POST /api/bff/agents/{id}/retire — reversibly retire a runtime agent
+/// by delegating to the existing confirmed emergency-stop flow.
+pub async fn runtime_agent_retire(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(agent_id): Path<String>,
+    Json(body): Json<AgentRetireRequest>,
+) -> Response {
+    risk_contain(
+        State(state),
+        headers,
+        Json(ContainmentRequest {
+            agent_id: agent_id.clone(),
+            reason: if body.reason.is_empty() {
+                "Agent retired from Governance Hub".to_string()
+            } else {
+                body.reason.clone()
+            },
+        }),
+    )
+    .await
+}
+
+#[derive(Deserialize)]
+pub struct AgentRetireRequest {
+    #[serde(default)]
+    pub reason: String,
+}
+
+/// GET /api/bff/my/assignments — member-scoped agents and MCPs.
+pub async fn my_assignments(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let sid = crate::console::cookie_value_pub(&headers, auth::SESSION_COOKIE).unwrap_or_default();
+    let _user = match state.sessions.get(&sid) {
+        Some(user) => user,
+        None => return now_err(StatusCode::UNAUTHORIZED, "login required"),
+    };
+
+    let hive_token = hive_service_token(&state).await;
+    let mcp_result = backend_get(
+        &state,
+        format!("{}/api/mcp-servers", hive_url()),
+        hive_token.as_deref(),
+    )
+    .await;
+
+    let mcp_list = mcp_result
+        .unwrap_or(json!([]))
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+
+    Json(json!({
+        "agents": [],
+        "mcps": mcp_list.iter().map(|mcp| json!({
+            "id": mcp.get("id").cloned().unwrap_or(json!(null)),
+            "name": mcp.get("name").cloned().unwrap_or(json!("unnamed")),
+            "status": mcp.get("status").cloned().unwrap_or(json!("active")),
+        })).collect::<Vec<_>>(),
+    }))
+    .into_response()
 }

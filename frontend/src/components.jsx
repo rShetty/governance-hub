@@ -71,6 +71,15 @@ export function Table({ cols, rows, empty }) {
 
 export function ErrorNote({ error }) {
   if (!error) return null
+  // Degrade gracefully for auth/token issues — show a clean message, not raw JSON.
+  const isAuthError = /401|403/.test(error)
+  if (isAuthError) {
+    return (
+      <div className="panel p-4 text-sm text-slate-400 border-slate-700 mb-4" data-testid="svc-degraded">
+        Some backend services are not yet connected to this deployment. Configure service tokens in the Hub environment to enable live data.
+      </div>
+    )
+  }
   return (
     <div className="glass p-4 text-sm text-amber-300 border-amber-900/60 mb-4">
       ⚠︎ Service degraded or unreachable — {error}
