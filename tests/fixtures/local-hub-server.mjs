@@ -391,7 +391,14 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (path.match(/^\/api\/svc\/sentiel\/api\/compliance\/(soc2|gdpr|eu_ai_act|hipaa)$/) && request.method === 'GET') {
-    return send(response, 200, { framework: path.split('/').at(-1), controls: [{ id: `${path.split('/').at(-1)}-cc1`, status: 'evidence-complete' }] })
+    const framework = path.split('/').at(-1)
+    return send(response, 200, {
+      framework,
+      controls: [
+        { id: `${framework}-cc1`, status: 'evidence-complete' },
+        { id: `${framework}-cc2`, status: 'evidence-gap' },
+      ],
+    })
   }
 
   if (path === '/api/bff/access/simulate' && request.method === 'POST') {
@@ -490,6 +497,20 @@ const server = http.createServer(async (request, response) => {
   if (path === '/api/bff/cost/keys/key_e2e_001/revoke' && request.method === 'POST') {
     miserKeys[0].active = false
     return send(response, 200, { id: 'key_e2e_001', active: false })
+  }
+
+  if (path === '/api/bff/aegis/policies' && request.method === 'POST') {
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      send(response, 200, { destination: body.destination, action: body.action, operator: body.owner })
+    })
+    return
+  }
+
+  if (path === '/api/svc/aegis/api/policy/destinations') {
+    return send(response, 200, [{ destination: 'blocked.example.test', action: 'block', owner: 'e2e@governance.test' }])
   }
 
   if (path === '/api/svc/forge/api/packages' && request.method === 'POST') {

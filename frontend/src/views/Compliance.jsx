@@ -26,6 +26,13 @@ export default function Compliance() {
   }, [framework])
 
   const report = reports[framework]
+  const controls = Array.isArray(report?.controls)
+    ? report.controls
+    : Object.entries(report ?? {}).flatMap(([section, value]) =>
+        Array.isArray(value) ? value.map((control) => ({ section, ...control })) : [],
+      )
+  const complete = controls.filter((control) => /complete|pass|satisfied|implemented/i.test(String(control.status ?? control.state ?? ''))).length
+  const gaps = controls.length - complete
 
   const exportReport = () => {
     const blob = new Blob([JSON.stringify({ framework, report, exported_at: new Date().toISOString() }, null, 2)], { type: 'application/json' })
@@ -52,6 +59,20 @@ export default function Compliance() {
       {loading && !report && <div className="panel p-6 text-sm text-slate-600">Loading report…</div>}
       {report && (
         <>
+          <div className="grid md:grid-cols-3 gap-6">
+            <section className="panel p-5" data-testid="coverage-total">
+              <span className="label">Controls evaluated</span>
+              <p className="mt-2 num text-2xl text-slate-100">{controls.length}</p>
+            </section>
+            <section className="panel p-5" data-testid="coverage-complete">
+              <span className="label">Evidence complete</span>
+              <p className="mt-2 num text-2xl text-emerald-400">{complete}</p>
+            </section>
+            <section className="panel p-5" data-testid="coverage-gaps">
+              <span className="label">Evidence gaps</span>
+              <p className={`mt-2 num text-2xl ${gaps ? 'text-rose-400' : 'text-slate-100'}`}>{gaps}</p>
+            </section>
+          </div>
           <section className="panel p-5" data-testid="compliance-report">
             <pre className="text-xs font-mono text-slate-300 whitespace-pre-wrap">{JSON.stringify(report, null, 2)}</pre>
           </section>

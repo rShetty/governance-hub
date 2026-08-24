@@ -1974,3 +1974,73 @@ pub async fn mcp_connect(
         Err(e) => now_err(StatusCode::BAD_GATEWAY, &format!("connect failed: {e}")),
     }
 }
+
+#[derive(Deserialize)]
+pub struct DestinationPolicyRequest {
+    pub destination: String,
+    pub action: String,
+    #[serde(default)]
+    pub reason: String,
+}
+
+/// GET /api/bff/aegis/policies — read Aegis destination policy posture.
+pub async fn destination_policies(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let token = svc_env(&state, "AEGIS_ADMIN_TOKEN");
+    match backend_get(
+        &state,
+        format!("{}/api/policy/destinations", aegis_url()),
+        token.as_deref(),
+    )
+    .await
+    {
+        Ok(result) => Json(result).into_response(),
+        Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("aegis: {error}")),
+    }
+}
+
+/// POST /api/bff/aegis/policies — create an attributed destination policy.
+pub async fn destination_policy_create(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<DestinationPolicyRequest>,
+) -> Response {
+    let user = match require_admin(&state, &headers).await {
+        Ok(user) => user,
+        Err(response) => return response,
+    };
+    if body.destination.trim().is_empty()
+        || !matches!(body.action.as_str(), "allow" | "block")
+        || body.reason.trim().is_empty()
+    {
+        return now_err(
+            StatusCode::BAD_REQUEST,
+            "destination, allow/block action, and reason are required",
+        );
+    }
+    let token = svc_env(&state, "AEGIS_ADMIN_TOKEN");
+    let payload = json!({
+        "destination": body.destination,
+        "action": body.action,
+        "reason": body.reason,
+        "owner": user.email,
+    });
+    match backend_post(
+        &state,
+        format!("{}/api/policy/destinations", aegis_url()),
+        token.as_deref(),
+        payload,
+    )
+    .await
+    {
+        Ok(mut result) => {
+            if let Some(object) = result.as_object_mut() {
+                object.insert("operator".into(), json!(user.email));
+            }
+            Json(result).into_response()
+        }
+        Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("aegis: {error}")),
+    }
+}
