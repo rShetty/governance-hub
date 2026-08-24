@@ -135,7 +135,7 @@ flow can be exercised end to end.
 ## Phase 9 - Backend UI Retirement
 
 - [x] Inventory remaining functionality available only in service frontends.
-- [ ] Port each normal-operator capability to the Hub.
+- [~] Port each normal-operator capability to the Hub.
 - [ ] Mark genuinely developer-only screens internal.
 - [x] Remove production deep links to service UIs.
 - [ ] Restrict backend dashboard/docs routes appropriately.
@@ -146,8 +146,9 @@ flow can be exercised end to end.
 | Service | Frontend-only capabilities found | Cutover |
 |---|---|---|
 | Hive | Marketplace, agent detail, skills, tasks, teams, workflows, MCP page | Agent/skills/MCP flows ported; teams/workflows remain Phase 9 work |
+| Hive Orchestration | Teams and workflows | Hub Orchestration view added |
 | Relay | Login/register/app/connectors/admin/settings/API keys/access requests | Connectors/backends/tools/OAuth state ported or represented; registration/API-key screens are developer-only |
-| Patroclus | Dashboard overview, principals, agents, resources, policies, approvals, sessions, vault | Core access/session/policy/remediation flows ported; vault UI remains future work |
+| Patroclus | Dashboard overview, principals, agents, resources, policies, approvals, sessions, vault | Core access/session/policy/remediation/vault metadata flows ported; secret creation/vending intentionally backend-only |
 | Miser | No product frontend found | N/A |
 | Sentiel | Dashboard/events/DLP/compliance views | Security/compliance/evidence flows ported |
 | Aegis | No full dashboard found; API-only posture | Egress/security/policy/attestation flows ported |

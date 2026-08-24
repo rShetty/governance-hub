@@ -362,6 +362,23 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
+  if (path === '/api/bff/risk/remediations' && request.method === 'POST') {
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      send(response, 201, {
+        id: `rem_${crypto.randomUUID().slice(0, 8)}`,
+        subject: body.subject,
+        title: body.title,
+        owner: body.owner,
+        status: 'open',
+        created_by: 'e2e@governance.test',
+      })
+    })
+    return
+  }
+
   if (path === '/api/bff/catalog') {
     return send(response, 200, {
       total: 2,
@@ -521,6 +538,24 @@ const server = http.createServer(async (request, response) => {
       send(response, 200, { destination: body.destination, action: body.action, operator: body.owner })
     })
     return
+  }
+
+  if (path === '/api/bff/orchestration' && request.method === 'GET') {
+    return send(response, 200, { teams: [{ id: 'team_e2e_001', name: 'Fixture Team' }], workflows: [] })
+  }
+
+  if ((path === '/api/bff/orchestration/teams' || path === '/api/bff/orchestration/workflows') && request.method === 'POST') {
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      send(response, 201, { id: `orch_${crypto.randomUUID().slice(0, 8)}`, name: body.name })
+    })
+    return
+  }
+
+  if (path === '/api/svc/patroclus/v1/vault/credentials') {
+    return send(response, 200, [])
   }
 
   if (path === '/api/svc/aegis/api/policy/destinations') {

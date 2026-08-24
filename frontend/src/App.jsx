@@ -13,6 +13,8 @@ import Egress from './views/Egress.jsx'
 import SupplyChain from './views/SupplyChain.jsx'
 import Compliance from './views/Compliance.jsx'
 import MyWorkspace from './views/MyWorkspace.jsx'
+import Orchestration from './views/Orchestration.jsx'
+import Vault from './views/Vault.jsx'
 
 const NAV = [
   { id: 'mission', label: 'Mission Control', icon: 'M3 12h4l3-8 4 16 3-8h4', view: MissionControl },
@@ -30,6 +32,8 @@ const NAV = [
 
 const ADMIN_NAV = [
   { id: 'identities', label: 'Identity Directory', icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-3a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75', view: Identities },
+  { id: 'orchestration', label: 'Orchestration', icon: 'M4 6h16M4 12h10M4 18h6', view: Orchestration },
+  { id: 'vault', label: 'Credential Vault', icon: 'M12 3l7 4v5c0 5-3.5 8.5-7 9.9C8.5 20.5 5 17 5 12V7z', view: Vault },
   { id: 'services', label: 'Service Registry', icon: 'M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6', view: Services },
 ]
 

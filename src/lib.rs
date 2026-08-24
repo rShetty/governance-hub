@@ -143,6 +143,11 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/bff/risk/contain", post(bff::risk_contain))
         .route("/api/bff/risk/remediations", post(bff::remediation_create))
+        .route("/api/bff/orchestration", get(bff::orchestration_overview))
+        .route(
+            "/api/bff/orchestration/{kind}",
+            post(bff::orchestration_create),
+        )
         .route("/api/bff/tools", get(bff::tools_overview))
         .route("/api/bff/catalog", get(bff::unified_catalog))
         .route(

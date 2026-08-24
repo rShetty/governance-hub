@@ -2169,3 +2169,81 @@ pub async fn remediation_create(
     }))
     .into_response()
 }
+
+/// GET /api/bff/orchestration — normalized Hive teams/workflows.
+pub async fn orchestration_overview(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let token = hive_service_token(&state).await;
+    let (teams, workflows) = tokio::join!(
+        backend_get(
+            &state,
+            format!("{}/api/teams", hive_url()),
+            token.as_deref()
+        ),
+        backend_get(
+            &state,
+            format!("{}/api/workflows", hive_url()),
+            token.as_deref()
+        ),
+    );
+    Json(json!({
+        "teams": teams.unwrap_or(json!([])),
+        "workflows": workflows.unwrap_or(json!([])),
+    }))
+    .into_response()
+}
+
+#[derive(Deserialize)]
+pub struct OrchestrationCreateRequest {
+    pub name: String,
+    #[serde(default)]
+    pub agent_ids: Vec<String>,
+    #[serde(default)]
+    pub steps: Vec<String>,
+}
+
+fn orchestration_payload(kind: &str, body: &OrchestrationCreateRequest) -> Value {
+    if kind == "teams" {
+        json!({ "name": body.name, "agent_ids": body.agent_ids })
+    } else {
+        json!({ "name": body.name, "steps": body.steps })
+    }
+}
+
+/// POST /api/bff/orchestration/{kind} — create Hive team or workflow.
+pub async fn orchestration_create(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(kind): Path<String>,
+    Json(body): Json<OrchestrationCreateRequest>,
+) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    if !matches!(kind.as_str(), "teams" | "workflows") {
+        return now_err(StatusCode::NOT_FOUND, "unknown orchestration resource");
+    }
+    if body.name.trim().is_empty()
+        || (kind == "teams" && body.agent_ids.is_empty())
+        || (kind == "workflows" && body.steps.is_empty())
+    {
+        return now_err(
+            StatusCode::BAD_REQUEST,
+            "name and required members/steps are needed",
+        );
+    }
+    let token = hive_service_token(&state).await;
+    match backend_post(
+        &state,
+        format!("{}/api/{}", hive_url(), kind),
+        token.as_deref(),
+        orchestration_payload(&kind, &body),
+    )
+    .await
+    {
+        Ok(result) => Json(result).into_response(),
+        Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("hive: {error}")),
+    }
+}
