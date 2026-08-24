@@ -132,6 +132,13 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
+  if (path.match(/^\/api\/bff\/mcp\/([^/]+)$/) && request.method === 'DELETE') {
+    const serverId = path.split('/')[4]
+    const index = mcpServers.findIndex(item => item.id === serverId)
+    if (index >= 0) mcpServers.splice(index, 1)
+    return send(response, 204)
+  }
+
   if (path.match(/^\/api\/bff\/mcp\/([^/]+)\/grant$/) && request.method === 'POST') {
     const serverId = path.split('/')[4]
     let raw = ''

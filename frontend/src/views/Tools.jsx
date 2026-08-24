@@ -50,6 +50,8 @@ export default function Tools() {
   const bff = useBff()
   const catalog = useUnifiedCatalog()
   const [healthMessage, setHealthMessage] = useState(null)
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const [extra, setExtra] = useState([])
   const [invocation, setInvocation] = useState({ action: 'call', resource: 'mcp/github', definition: '', preview: null, result: null })
 
   const runAuthorizationPreview = async () => {
@@ -77,8 +79,6 @@ export default function Tools() {
     }
     setInvocation((current) => ({ ...current, result: { accepted: true, action: current.action, resource: current.resource } }))
   }
-  const [showForm, setShowForm] = useState(false)
-  const [extra, setExtra] = useState([])
 
   const tools = Array.isArray(bff.data?.tools) ? bff.data.tools : []
 
@@ -226,18 +226,16 @@ export default function Tools() {
           <span className="label">MCP servers · catalogue</span>
           <button
             className="btn btn-primary !py-1.5 !px-3 !text-xs"
-            data-testid="toggle-mcp-form"
-            onClick={() => setShowForm((v) => !v)}
+            data-testid="install-mcp-btn"
+            onClick={() => setWizardOpen(true)}
           >
-            {showForm ? 'Cancel' : '+ Register MCP server'}
+            Install MCP server
           </button>
         </div>
-        {showForm && (
-          <McpForm
-            onCreated={(srv) => {
-              setShowForm(false)
-              setExtra((x) => [...x, srv])
-            }}
+        {wizardOpen && (
+          <InstallWizard
+            onClose={() => setWizardOpen(false)}
+            onInstalled={(srv) => setExtra((x) => [...x.filter((s) => s.id !== srv.id), srv])}
           />
         )}
         <McpList extra={extra} />
@@ -430,6 +428,183 @@ function McpList({ extra = [] }) {
         </div>
       )}
       {busy && <div className="p-2 text-[11px] text-slate-500 num">working: {busy}…</div>}
+    </div>
+  )
+}
+
+function InstallWizard({ onClose, onInstalled }) {
+  const [step, setStep] = useState(1)
+  const [config, setConfig] = useState({
+    name: '', url: '', transport: 'sse', description: '',
+    agentIds: '', scopes: 'relay:call',
+    autoGrant: true,
+  })
+  const [busy, setBusy] = useState(false)
+  const [installedServer, setInstalledServer] = useState(null)
+  const [error, setError] = useState('')
+
+  const STEPS = ['Configure', 'Install', 'Authorize', 'Done']
+
+  const next = () => setStep((s) => Math.min(s + 1, 4))
+  const back = () => setStep((s) => Math.max(s - 1, 1))
+
+  const doInstall = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      // Step 2: Register the server
+      const res = await fetch('/api/bff/mcp', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          name: config.name,
+          url: config.url,
+          transport: config.transport,
+          description: config.description,
+        }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error || `status ${res.status}`)
+      setInstalledServer(body)
+    } catch (e) {
+      setError(String(e.message || e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const doAuthorize = async () => {
+    if (!installedServer || !config.agentIds.trim()) return next()
+    setBusy(true)
+    try {
+      const ids = config.agentIds.split(',').map((id) => id.trim()).filter(Boolean)
+      const res = await fetch(`/api/bff/mcp/${installedServer.id}/grant`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ agent_ids: ids }),
+      })
+      if (!res.ok) throw new Error(`grant failed: status ${res.status}`)
+      next()
+    } catch (e) {
+      setError(String(e.message || e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const inputCls = 'w-full px-3 py-2 rounded-lg bg-[#0a0c10] border border-[#232833] text-[13px] text-slate-200 focus:outline-none focus:border-teal-500'
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 flex items-start justify-center pt-[8vh]" data-testid="install-wizard">
+      <div className="w-full max-w-lg panel !bg-[#10131a] shadow-2xl p-6 space-y-5" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-slate-100">Install MCP Server</h2>
+          <button className="btn btn-ghost !px-2 !text-sm" onClick={onClose}>✕</button>
+        </div>
+
+        {/* Stepper */}
+        <div className="flex items-center gap-0" data-testid="wizard-stepper">
+          {STEPS.map((label, i) => (
+            <div key={label} className="flex items-center flex-1 last:flex-none">
+              <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold transition-colors ${
+                step > i ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40'
+                : step === i + 1 ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-400/40'
+                : 'bg-slate-800 text-slate-600 border border-slate-700'
+              }`}>{i + 1}</div>
+              <span className={`ml-1.5 text-[11px] font-medium whitespace-nowrap ${
+                step >= i + 1 ? 'text-slate-200' : 'text-slate-600'
+              }`}>{label}</span>
+              {i < STEPS.length - 1 && <div className={`flex-1 h-px mx-2 ${step > i + 1 ? 'bg-teal-500/40' : 'bg-[#232833]'}`} />}
+            </div>
+          ))}
+        </div>
+
+        {/* Error banner */}
+        {error && (
+          <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-sm text-rose-300">{error}</div>
+        )}
+
+        {/* Step 1: Configure */}
+        {step === 1 && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-400">Register a new MCP server endpoint for the ecosystem catalog.</p>
+            <label className="block"><span className="text-xs text-slate-500">Server name</span>
+              <input className={inputCls} data-testid="wiz-name" required placeholder="github-mcp" value={config.name} onChange={(e) => setConfig({ ...config, name: e.target.value })} />
+            </label>
+            <label className="block"><span className="text-xs text-slate-500">Endpoint URL</span>
+              <input className={inputCls} data-testid="wiz-url" type="url" required placeholder="https://mcp.example.com/sse" value={config.url} onChange={(e) => setConfig({ ...config, url: e.target.value })} />
+            </label>
+            <label className="block"><span className="text-xs text-slate-500">Transport</span>
+              <select className={inputCls} value={config.transport} onChange={(e) => setConfig({ ...config, transport: e.target.value })}>
+                <option value="sse">SSE</option>
+                <option value="streamable-http">Streamable HTTP</option>
+                <option value="stdio">stdio</option>
+              </select>
+            </label>
+            <label className="block"><span className="text-xs text-slate-500">Description</span>
+              <input className={inputCls} placeholder="What does this server provide?" value={config.description} onChange={(e) => setConfig({ ...config, description: e.target.value })} />
+            </label>
+            <div className="flex justify-end">
+              <button className="btn btn-primary" disabled={!config.name || !config.url} onClick={() => { if (!config.description) config.description = config.name; next() }} data-testid="wiz-next-1">Next →</button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 2: Install */}
+        {step === 2 && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-400">Ready to install. The server will be registered in the Hive catalog and made available to Relay.</p>
+            <div className="inset p-3 text-xs text-slate-300 space-y-1">
+              <div><span className="text-slate-500">Name:</span> {config.name}</div>
+              <div><span className="text-slate-500">URL:</span> {config.url}</div>
+              <div><span className="text-slate-500">Transport:</span> {config.transport}</div>
+            </div>
+            {!installedServer ? (
+              <button className="btn btn-primary w-full" disabled={busy} onClick={doInstall} data-testid="wiz-install-btn">
+                {busy ? 'Installing…' : 'Install now'}
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-sm text-emerald-300" data-testid="wiz-installed-ok">
+                ✓ Installed as <code className="font-mono text-xs">{installedServer.id}</code>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <button className="btn btn-ghost" onClick={back}>← Back</button>
+              {installedServer && <button className="btn btn-primary" onClick={next} data-testid="wiz-next-2">Next →</button>}
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Authorize */}
+        {step === 3 && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-400">Which agents should have access? You can also grant access later from this page.</p>
+            <label className="block"><span className="text-xs text-slate-500">Agent IDs (comma separated)</span>
+              <textarea className={inputCls} rows={3} data-testid="wiz-agents" placeholder="agt_abc123, agt_def456" value={config.agentIds} onChange={(e) => setConfig({ ...config, agentIds: e.target.value })} />
+            </label>
+            <div className="flex justify-between">
+              <button className="btn btn-ghost" onClick={next}>Skip</button>
+              <button className="btn btn-primary" disabled={busy || !config.agentIds.trim()} onClick={doAuthorize} data-testid="wiz-authorize-btn">
+                {busy ? 'Authorizing…' : 'Grant access'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 4: Done */}
+        {step === 4 && (
+          <div className="space-y-4 text-center py-6" data-testid="wiz-done">
+            <div className="text-3xl">✅</div>
+            <h3 className="text-lg font-semibold text-slate-100">Installation complete</h3>
+            <p className="text-sm text-slate-400">
+              <strong>{config.name}</strong> is installed and ready.
+              {config.agentIds.trim() ? ' Access has been granted to the specified agents.' : ' No agents were assigned yet — use Grant on the catalog row.'}
+            </p>
+            <button className="btn btn-primary" data-testid="wiz-finish" onClick={() => { onInstalled(installedServer); onClose() }}>Finish</button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
