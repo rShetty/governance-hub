@@ -152,6 +152,10 @@ pub fn router(state: AppState) -> Router {
             "/api/bff/agents/{agent_id}/retire",
             post(bff::runtime_agent_retire),
         )
+        .route(
+            "/api/bff/agents/{agent_id}/restore",
+            post(bff::agent_restore),
+        )
         .route("/api/bff/orchestration", get(bff::orchestration_overview))
         .route(
             "/api/bff/orchestration/{kind}",

@@ -2344,3 +2344,31 @@ pub async fn my_assignments(State(state): State<AppState>, headers: HeaderMap) -
     }))
     .into_response()
 }
+
+/// POST /api/bff/agents/{id}/restore — clear emergency stop via Patroclus.
+pub async fn agent_restore(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(agent_id): Path<String>,
+) -> Response {
+    let (_, token) = match patroclus_admin(&state, &headers).await {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    match backend_post(
+        &state,
+        format!("{}/v1/admin/agents/{}/restore", patroclus_url(), agent_id),
+        token.as_deref(),
+        json!({}),
+    )
+    .await
+    {
+        Ok(result) => Json(json!({
+            "agent_id": agent_id,
+            "status": "restored",
+            "result": result,
+        }))
+        .into_response(),
+        Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("patroclus: {error}")),
+    }
+}

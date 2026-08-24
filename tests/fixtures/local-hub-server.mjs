@@ -362,6 +362,10 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
+  if (path === '/api/bff/agents/00000000-0000-0000-0000-000000000009/restore' && request.method === 'POST') {
+    return send(response, 200, { agent_id: '00000000-0000-0000-0000-000000000009', status: 'restored' })
+  }
+
   if (path === '/api/bff/risk/remediations' && request.method === 'POST') {
     let raw = ''
     request.on('data', chunk => { raw += chunk })
