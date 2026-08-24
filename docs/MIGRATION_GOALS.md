@@ -107,15 +107,15 @@ flow can be exercised end to end.
 
 ## Phase 7 - Unified Activity
 
-- [ ] Canonical event DTO.
+- [x] Canonical event DTO.
 - [~] Normalizers for all eight sources.
-- [ ] Unified timeline endpoint.
-- [~] Actor/session/resource/service/severity filters.
+- [x] Unified timeline endpoint.
+- [x] Actor/session/resource/service/severity filters.
 - [~] End-to-end trace detail view.
 - [~] Hash-chain/integrity indicators.
-- [ ] Evidence export.
+- [x] Evidence export.
 - [x] Replace Mission Control placeholder feed.
-- [ ] Cover filtering and trace reconstruction through local Playwright.
+- [x] Cover filtering and trace reconstruction through local Playwright.
 
 ## Phase 8 - Risk And Compliance
 
