@@ -130,16 +130,29 @@ flow can be exercised end to end.
 - [x] Containment workflow for failed attestations.
 - [x] Remediation ownership/status.
 - [x] Report/evidence export.
-- [~] Cover risk workflows through local Playwright.
+- [x] Cover risk workflows through local Playwright.
 
 ## Phase 9 - Backend UI Retirement
 
-- [ ] Inventory remaining functionality available only in service frontends.
+- [x] Inventory remaining functionality available only in service frontends.
 - [ ] Port each normal-operator capability to the Hub.
 - [ ] Mark genuinely developer-only screens internal.
-- [ ] Remove production deep links to service UIs.
+- [x] Remove production deep links to service UIs.
 - [ ] Restrict backend dashboard/docs routes appropriately.
 - [ ] Confirm every operator journey starts and ends in the Hub.
+
+## Phase 9 Inventory
+
+| Service | Frontend-only capabilities found | Cutover |
+|---|---|---|
+| Hive | Marketplace, agent detail, skills, tasks, teams, workflows, MCP page | Agent/skills/MCP flows ported; teams/workflows remain Phase 9 work |
+| Relay | Login/register/app/connectors/admin/settings/API keys/access requests | Connectors/backends/tools/OAuth state ported or represented; registration/API-key screens are developer-only |
+| Patroclus | Dashboard overview, principals, agents, resources, policies, approvals, sessions, vault | Core access/session/policy/remediation flows ported; vault UI remains future work |
+| Miser | No product frontend found | N/A |
+| Sentiel | Dashboard/events/DLP/compliance views | Security/compliance/evidence flows ported |
+| Aegis | No full dashboard found; API-only posture | Egress/security/policy/attestation flows ported |
+| Argus | Login/register/authorize/consent screens | SSO remains required at Argus by protocol; post-auth administration is Hub-owned |
+| Forge | No product frontend found | Supply-chain package/publisher/key/trust flows ported |
 
 ## Validation Gate For Every Feature
 

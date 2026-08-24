@@ -6,7 +6,7 @@ label = "Hive"
 description = "Agent runtime & marketplace — delegations, teams, wallet"
 url = "http://127.0.0.1:8080"
 health_path = "/api/health"
-ui_path = "https://hive.rajeev.me"
+ui_path = "internal-only"
 color = "#f59e0b"
 
 [services.patroclus]
@@ -22,7 +22,7 @@ label = "Relay"
 description = "MCP gateway & tool proxy — connectors, permissions, consent"
 url = "http://127.0.0.1:8000"
 health_path = "/ready"
-ui_path = "https://relay.rajeev.me"
+ui_path = "internal-only"
 color = "#06b6d4"
 
 [services.miser]

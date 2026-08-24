@@ -90,8 +90,8 @@ export default function Services({ onChanged }) {
           <input className={input} value={form.health_path} onChange={set('health_path')} />
         </label>
         <label className="block">
-          <span className="text-xs text-slate-500">UI deep link</span>
-          <input className={input} value={form.ui_path} onChange={set('ui_path')} placeholder="http://127.0.0.1:8585/" />
+          <span className="text-xs text-slate-500">UI path (developer-only, never linked)</span>
+          <input className={input} value={form.ui_path} onChange={set('ui_path')} placeholder="internal-only" />
         </label>
         <label className="block">
           <span className="text-xs text-slate-500">Accent color</span>
@@ -124,7 +124,7 @@ export default function Services({ onChanged }) {
         )}
       </div>
       <p className="text-[11px] text-slate-600">
-        Services persist under <code className="text-slate-500">/etc/governance-hub/services.d/&lt;id&gt;.toml</code> and appear on the board after the next probe cycle.
+        Services persist under <code className="text-slate-500">/etc/governance-hub/services.d/&lt;id&gt;.toml</code>. Governance Hub is the operator UI; product frontends are internal only.
       </p>
     </form>
     </div>
