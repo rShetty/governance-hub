@@ -132,6 +132,56 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
+  if (path.match(/^\/api\/bff\/mcp\/([^/]+)\/access$/) && request.method === 'GET') {
+    const serverId = path.split('/')[4]
+    const server = mcpServers.find(item => item.id === serverId)
+    return send(response, 200, { agents: server?.authorized_agents ?? [] })
+  }
+
+  if (path.match(/^\/api\/bff\/mcp\/([^/]+)\/grant$/) && request.method === 'POST') {
+    const serverId = path.split('/')[4]
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      const server = mcpServers.find(item => item.id === serverId)
+      if (!server) return send(response, 404, { error: 'not found' })
+      for (const aid of body.agent_ids ?? []) {
+        if (!server.authorized_agents.includes(aid)) server.authorized_agents.push(aid)
+      }
+      send(response, 200, { granted: body.agent_ids ?? [] })
+    })
+    return
+  }
+
+  if (path.match(/^\/api\/bff\/mcp\/([^/]+)\/revoke$/) && request.method === 'POST') {
+    const serverId = path.split('/')[4]
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      const server = mcpServers.find(item => item.id === serverId)
+      if (server) {
+        for (const aid of body.agent_ids ?? []) {
+          server.authorized_agents = server.authorized_agents.filter(id => id !== aid)
+        }
+      }
+      send(response, 200, { revoked: body.agent_ids ?? [] })
+    })
+    return
+  }
+
+  if (path === '/api/bff/policies' && request.method === 'POST') {
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      policies.push({ id: `pol_${crypto.randomUUID().slice(0, 8)}`, status: 'active', ...body })
+      send(response, 201, policies.at(-1))
+    })
+    return
+  }
+
   if (path.match(/^\/api\/bff\/mcp\/([^/]+)$/) && request.method === 'DELETE') {
     const serverId = path.split('/')[4]
     const index = mcpServers.findIndex(item => item.id === serverId)
@@ -449,8 +499,9 @@ const server = http.createServer(async (request, response) => {
     request.on('end', () => {
       const body = JSON.parse(raw || '{}')
       send(response, 200, {
-        decision: body.action === 'call' && body.resource === 'mcp/github' ? 'allow' : 'deny',
-        matched_rule: body.resource === 'mcp/github' ? 'allow-github' : null,
+        // Allow when the definition contains "decision: allow" and the resource matches
+        decision: body.definition?.includes('decision: allow') ? 'allow' : 'deny',
+        matched_rule: body.definition?.includes('decision: allow') ? 'simulated-rule' : null,
         advisory: true,
       })
     })

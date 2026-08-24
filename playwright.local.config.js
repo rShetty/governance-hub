@@ -3,6 +3,7 @@ import { defineConfig } from '@playwright/test'
 const FORGE_PORT = 18788
 const HUB_PORT = 18600
 process.env.E2E_BASE_URL = `http://127.0.0.1:${HUB_PORT}`
+process.env.E2E_LOCAL = '1'
 
 export default defineConfig({
   testDir: './tests/e2e',
