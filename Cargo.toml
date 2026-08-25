@@ -11,7 +11,7 @@ tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = ["fs", "set-header", "cors"] }
 include_dir = "0.7"
 mime_guess = "2"
-jsonwebtoken = "9"
+jsonwebtoken = "10.3"
 rand = "0.8"
 sha2 = "0.10"
 base64 = "0.22"
