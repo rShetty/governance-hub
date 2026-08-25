@@ -26,6 +26,8 @@ flow can be exercised end to end.
 - [x] Add Supply Chain navigation and Forge package/publisher baseline.
 - [x] Add initial Playwright collection coverage for Supply Chain.
 - [x] Add MCP OAuth install support with DCR/CIMD discovery, pre-registered client credentials, scopes, backend proxying, and browser proof.
+- [x] Prove MCP CIMD precedence over DCR in Hive and expose resolved mode through Hub browser tests.
+- [x] Implement Argus OIDC RFC 7591 dynamic client registration for public relying parties.
 
 ## Phase 1 - Local Quality Harness
 
@@ -48,7 +50,7 @@ flow can be exercised end to end.
 - [x] Revoke Patroclus tokens.
 - [x] Show per-backend success/failure for cross-service operations (containment returns per-backend results).
 - [x] Require explicit confirmation and operator attribution (all destructive actions prompt for reason/confirmation).
-- [x] Cover every lifecycle action through local Playwright (90 tests pass, 0 skipped).
+- [x] Cover every lifecycle action through local Playwright (92 tests pass, 0 skipped).
 
 ## Phase 3 - Access Operations
 

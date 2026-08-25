@@ -146,7 +146,19 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (path.match(/^\/api\/bff\/mcp\/([^/]+)\/oauth\/connect$/) && request.method === 'GET') {
-    return send(response, 200, { authorization_url: '/__test__/oauth-provider' })
+    const serverId = path.split('/')[4]
+    const server = mcpServers.find(item => item.id === serverId)
+    if (!server || server.auth_type !== 'oauth') return send(response, 400, { error: 'not oauth' })
+    if (server.oauth_client_id) {
+      return send(response, 200, {
+        authorization_url: `/__test__/oauth-provider?client_id=${encodeURIComponent(server.oauth_client_id)}&mode=cimd`,
+        mode: 'cimd',
+      })
+    }
+    return send(response, 200, {
+      authorization_url: '/__test__/oauth-provider?mode=dcr',
+      mode: 'dcr',
+    })
   }
 
   if (path.match(/^\/api\/bff\/mcp\/([^/]+)\/access$/) && request.method === 'GET') {
@@ -730,6 +742,10 @@ const server = http.createServer(async (request, response) => {
       send(response, 200, { added: true })
     })
     return
+  }
+
+  if (path === '/__test__/oauth-provider') {
+    return send(response, 200, { provider: 'fixture-oauth', query: Object.fromEntries(url.searchParams) })
   }
 
   if (!request.method || request.method !== 'GET' || path.startsWith('/api/')) {

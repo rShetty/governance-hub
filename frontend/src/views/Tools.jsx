@@ -546,6 +546,7 @@ function InstallWizard({ onClose, onInstalled }) {
   })
   const [busy, setBusy] = useState(false)
   const [installedServer, setInstalledServer] = useState(null)
+  const [oauthMode, setOauthMode] = useState('')
   const [authError, setAuthError] = useState('')
   const [error, setError] = useState('')
 
@@ -624,7 +625,10 @@ function InstallWizard({ onClose, onInstalled }) {
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body.detail || body.error || `status ${res.status}`)
       if (body.authorization_url) {
-        window.open(body.authorization_url, '_blank', 'width=600,height=700')
+        const url = new URL(body.authorization_url, window.location.origin)
+        url.searchParams.set('hub_oauth_mode', body.mode || (config.oauthClientId ? 'cimd' : 'dcr'))
+        setOauthMode(url.searchParams.get('hub_oauth_mode'))
+        window.open(url.toString(), '_blank', 'width=600,height=700')
         next()
       } else {
         throw new Error('No authorization URL returned')
@@ -770,6 +774,7 @@ function InstallWizard({ onClose, onInstalled }) {
             <button className="btn btn-primary w-full" disabled={busy} onClick={startOauthConnect} data-testid="wiz-oauth-connect-btn">
               {busy ? 'Starting OAuth…' : 'Start OAuth authorization'}
             </button>
+            {oauthMode && <p data-testid="wiz-oauth-mode">Resolved mode: {oauthMode}</p>}
             <div className="flex justify-between">
               <button className="btn btn-ghost" onClick={next}>Skip for now</button>
             </div>
