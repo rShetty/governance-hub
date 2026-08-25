@@ -107,6 +107,11 @@ pub fn router(state: AppState) -> Router {
         .route("/api/bff/mcp/{server_id}/revoke", post(bff::mcp_revoke))
         .route("/api/bff/mcp/{server_id}/access", get(bff::mcp_access))
         .route("/api/bff/mcp/{server_id}/connect", post(bff::mcp_connect))
+        .route("/api/bff/mcp/{server_id}", patch(bff::mcp_update))
+        .route(
+            "/api/bff/mcp/{server_id}/oauth/connect",
+            get(bff::mcp_oauth_connect),
+        )
         .route(
             "/api/bff/policies",
             get(bff::policy_list).post(bff::policy_create),

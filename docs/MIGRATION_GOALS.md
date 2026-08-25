@@ -25,6 +25,7 @@ flow can be exercised end to end.
 - [x] Require authenticated admin sessions for service proxying.
 - [x] Add Supply Chain navigation and Forge package/publisher baseline.
 - [x] Add initial Playwright collection coverage for Supply Chain.
+- [x] Add MCP OAuth install support with DCR/CIMD discovery, pre-registered client credentials, scopes, backend proxying, and browser proof.
 
 ## Phase 1 - Local Quality Harness
 
@@ -43,11 +44,11 @@ flow can be exercised end to end.
 - [x] Remove or reversibly retire Hive runtime agents (retire endpoint + emergency stop).
 - [x] Link Patroclus actor/agent records (emergency kill and retire use Patroclus agent UUIDs).
 - [x] Trigger Patroclus emergency kill.
-- [ ] Trigger Patroclus restore (Patroclus backend lacks a restore route; adding one requires explicit safety review).
+- [x] Trigger Patroclus restore through the Agents UI (`tests/e2e/agent-restore.spec.js` proves emergency stop and clear-stop calls).
 - [x] Revoke Patroclus tokens.
 - [x] Show per-backend success/failure for cross-service operations (containment returns per-backend results).
 - [x] Require explicit confirmation and operator attribution (all destructive actions prompt for reason/confirmation).
-- [x] Cover every lifecycle action through local Playwright (80 tests pass, 0 skipped).
+- [x] Cover every lifecycle action through local Playwright (90 tests pass, 0 skipped).
 
 ## Phase 3 - Access Operations
 

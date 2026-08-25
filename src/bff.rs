@@ -2372,3 +2372,62 @@ pub async fn agent_restore(
         Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("patroclus: {error}")),
     }
 }
+
+/// PATCH /api/bff/mcp/{server_id} — update auth config on an MCP server.
+pub async fn mcp_update(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(server_id): Path<String>,
+    Json(body): Json<Value>,
+) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let token = hive_service_token(&state).await;
+    match state
+        .client
+        .patch(format!("{}/api/mcp-servers/{server_id}", hive_url()))
+        .bearer_auth(token.unwrap_or_default())
+        .json(&body)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+    {
+        Ok(response) => {
+            let status =
+                StatusCode::from_u16(response.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+            (status, Json(response.json().await.unwrap_or(Value::Null))).into_response()
+        }
+        Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("hive: {error}")),
+    }
+}
+
+/// GET /api/bff/mcp/{server_id}/oauth/connect — begin OAuth connect via Hive.
+pub async fn mcp_oauth_connect(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(server_id): Path<String>,
+) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let token = hive_service_token(&state).await;
+    match state
+        .client
+        .get(format!(
+            "{}/api/mcp/servers/{server_id}/connect",
+            hive_url()
+        ))
+        .bearer_auth(token.unwrap_or_default())
+        .timeout(std::time::Duration::from_secs(15))
+        .send()
+        .await
+    {
+        Ok(response) => {
+            let status =
+                StatusCode::from_u16(response.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+            (status, Json(response.json().await.unwrap_or(Value::Null))).into_response()
+        }
+        Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("hive: {error}")),
+    }
+}

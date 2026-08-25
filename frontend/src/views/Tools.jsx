@@ -537,16 +537,24 @@ function InstallWizard({ onClose, onInstalled }) {
   const [step, setStep] = useState(1)
   const [config, setConfig] = useState({
     name: '', url: '', transport: 'sse', description: '',
-    agentIds: '', scopes: 'relay:call',
-    autoGrant: true,
+    agentIds: '',
+    authType: 'none',
+    oauthClientId: '',
+    oauthClientSecret: '',
+    oauthScopes: '',
+    headers: '',
   })
   const [busy, setBusy] = useState(false)
   const [installedServer, setInstalledServer] = useState(null)
+  const [authError, setAuthError] = useState('')
   const [error, setError] = useState('')
 
-  const STEPS = ['Configure', 'Install', 'Authorize', 'Done']
+  const needsAuth = config.authType === 'oauth'
+  const STEPS = needsAuth
+    ? ['Configure', 'Install', 'Authenticate', 'Authorize', 'Done']
+    : ['Configure', 'Install', 'Authorize', 'Done']
 
-  const next = () => setStep((s) => Math.min(s + 1, 4))
+  const next = () => setStep((s) => Math.min(s + 1, STEPS.length))
   const back = () => setStep((s) => Math.max(s - 1, 1))
 
   const doInstall = async () => {
@@ -567,6 +575,20 @@ function InstallWizard({ onClose, onInstalled }) {
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body.error || `status ${res.status}`)
       setInstalledServer(body)
+
+      // PATCH auth config for OAuth servers
+      if (config.authType !== 'none') {
+        const patchBody = { auth_type: config.authType }
+        if (config.oauthScopes) patchBody.oauth_scopes = config.oauthScopes
+        if (config.oauthClientId) patchBody.oauth_client_id = config.oauthClientId
+        if (config.oauthClientSecret) patchBody.oauth_client_secret = config.oauthClientSecret
+        const authResponse = await fetch(`/api/bff/mcp/${body.id}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(patchBody),
+        })
+        if (!authResponse.ok) throw new Error(`auth configuration failed: status ${authResponse.status}`)
+      }
     } catch (e) {
       setError(String(e.message || e))
     } finally {
@@ -588,6 +610,27 @@ function InstallWizard({ onClose, onInstalled }) {
       next()
     } catch (e) {
       setError(String(e.message || e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const startOauthConnect = async () => {
+    if (!installedServer) return
+    setBusy(true)
+    setAuthError('')
+    try {
+      const res = await fetch(`/api/bff/mcp/${installedServer.id}/oauth/connect`)
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.detail || body.error || `status ${res.status}`)
+      if (body.authorization_url) {
+        window.open(body.authorization_url, '_blank', 'width=600,height=700')
+        next()
+      } else {
+        throw new Error('No authorization URL returned')
+      }
+    } catch (e) {
+      setAuthError(String(e.message || e))
     } finally {
       setBusy(false)
     }
@@ -646,6 +689,29 @@ function InstallWizard({ onClose, onInstalled }) {
             <label className="block"><span className="text-xs text-slate-500">Description</span>
               <input className={inputCls} placeholder="What does this server provide?" value={config.description} onChange={(e) => setConfig({ ...config, description: e.target.value })} />
             </label>
+            <label className="block"><span className="text-xs text-slate-500">Authentication</span>
+              <select className={inputCls} data-testid="wiz-auth-type" value={config.authType} onChange={(e) => setConfig({ ...config, authType: e.target.value })}>
+                <option value="none">None (open access)</option>
+                <option value="oauth">OAuth 2.0 (DCR / client credentials)</option>
+              </select>
+            </label>
+            {config.authType === 'oauth' && (
+              <div className="inset p-3 space-y-3 rounded-lg">
+                <p className="text-[11px] text-slate-500">
+                  The server will attempt Dynamic Client Registration (DCR / RFC 7591) automatically.
+                  If the provider doesn't support DCR, provide pre-registered client credentials below (CIMD).
+                </p>
+                <label className="block"><span className="text-xs text-slate-500">Client ID (optional — leave blank for DCR)</span>
+                  <input className={inputCls} data-testid="wiz-client-id" placeholder="Pre-registered client ID" value={config.oauthClientId} onChange={(e) => setConfig({ ...config, oauthClientId: e.target.value })} />
+                </label>
+                <label className="block"><span className="text-xs text-slate-500">Client Secret (optional)</span>
+                  <input className={inputCls} type="password" data-testid="wiz-client-secret" placeholder="Pre-registered client secret" value={config.oauthClientSecret} onChange={(e) => setConfig({ ...config, oauthClientSecret: e.target.value })} />
+                </label>
+                <label className="block"><span className="text-xs text-slate-500">Scopes</span>
+                  <input className={inputCls} data-testid="wiz-scopes" placeholder="openid read write" value={config.oauthScopes} onChange={(e) => setConfig({ ...config, oauthScopes: e.target.value })} />
+                </label>
+              </div>
+            )}
             <div className="flex justify-end">
               <button className="btn btn-primary" disabled={!config.name || !config.url} onClick={() => { if (!config.description) config.description = config.name; next() }} data-testid="wiz-next-1">Next →</button>
             </div>
@@ -677,8 +743,8 @@ function InstallWizard({ onClose, onInstalled }) {
           </div>
         )}
 
-        {/* Step 3: Authorize */}
-        {step === 3 && (
+        {/* Step 3/4: Authorize */}
+        {step === (needsAuth ? 4 : 3) && (
           <div className="space-y-4">
             <p className="text-sm text-slate-400">Which agents should have access? You can also grant access later from this page.</p>
             <label className="block"><span className="text-xs text-slate-500">Agent IDs (comma separated)</span>
@@ -693,8 +759,25 @@ function InstallWizard({ onClose, onInstalled }) {
           </div>
         )}
 
-        {/* Step 4: Done */}
-        {step === 4 && (
+        {/* Step 3 (OAuth): Authenticate */}
+        {step === 3 && needsAuth && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-400">
+              Click below to start the OAuth authorization flow. A popup will open — sign in and grant access.
+              The server will use DCR if supported, or the credentials you provided.
+            </p>
+            {authError && <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-sm text-rose-300">{authError}</div>}
+            <button className="btn btn-primary w-full" disabled={busy} onClick={startOauthConnect} data-testid="wiz-oauth-connect-btn">
+              {busy ? 'Starting OAuth…' : 'Start OAuth authorization'}
+            </button>
+            <div className="flex justify-between">
+              <button className="btn btn-ghost" onClick={next}>Skip for now</button>
+            </div>
+          </div>
+        )}
+
+        {/* Final step: Done */}
+        {step === (needsAuth ? 5 : 4) && (
           <div className="space-y-4 text-center py-6" data-testid="wiz-done">
             <div className="text-3xl">✅</div>
             <h3 className="text-lg font-semibold text-slate-100">Installation complete</h3>

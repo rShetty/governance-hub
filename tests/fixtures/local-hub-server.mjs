@@ -132,6 +132,23 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
+  if (path.match(/^\/api\/bff\/mcp\/([^/]+)$/) && request.method === 'PATCH') {
+    const serverId = path.split('/')[4]
+    const server = mcpServers.find(item => item.id === serverId)
+    if (!server) return send(response, 404, { error: 'server not found' })
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => {
+      Object.assign(server, JSON.parse(raw || '{}'))
+      send(response, 200, server)
+    })
+    return
+  }
+
+  if (path.match(/^\/api\/bff\/mcp\/([^/]+)\/oauth\/connect$/) && request.method === 'GET') {
+    return send(response, 200, { authorization_url: '/__test__/oauth-provider' })
+  }
+
   if (path.match(/^\/api\/bff\/mcp\/([^/]+)\/access$/) && request.method === 'GET') {
     const serverId = path.split('/')[4]
     const server = mcpServers.find(item => item.id === serverId)

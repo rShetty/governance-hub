@@ -68,6 +68,20 @@ export default function AgentsView() {
     }
   }
 
+  const restoreAgent = async () => {
+    const patroclusId = window.prompt('Patroclus agent UUID:')
+    if (!patroclusId?.trim()) return
+    setActionError('')
+    try {
+      const response = await fetch(`/api/bff/agents/${encodeURIComponent(patroclusId)}/restore`, { method: 'POST' })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.error || `status ${response.status}`)
+      setActionError(`Emergency stop cleared for ${patroclusId}. Status: ${body.status}.`)
+    } catch (error) {
+      setActionError(String(error.message || error))
+    }
+  }
+
   const mintIdentity = async (event) => {
     event.preventDefault()
     setActionError('')
@@ -132,6 +146,7 @@ export default function AgentsView() {
             Runtime actors (Hive) and their ecosystem identities (Argus) — one roster.
           </p>
           <button className="btn btn-ghost mt-2" onClick={emergencyKill}>Emergency stop</button>
+          <button className="btn btn-ghost mt-2 ml-2" data-testid="agent-restore-btn" onClick={restoreAgent}>Restore agent</button>
           <button className="btn btn-ghost mt-2 ml-2" onClick={checkRuntimeHealth}>Check runtime health</button>
         </div>
       </div>
