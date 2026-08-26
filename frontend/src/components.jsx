@@ -309,3 +309,47 @@ export function ResourceSelect({ label, name, options, required = true }) {
     </label>
   )
 }
+
+export function usePagination(items, pageSize = 20) {
+  const [page, setPage] = useState(0)
+  const totalPages = Math.max(1, Math.ceil((items?.length ?? 0) / pageSize))
+  const safePage = Math.min(page, totalPages - 1)
+  const pageItems = (items ?? []).slice(safePage * pageSize, (safePage + 1) * pageSize)
+  return {
+    page: safePage,
+    setPage,
+    totalPages,
+    total: items?.length ?? 0,
+    pageItems,
+    reset: () => setPage(0),
+  }
+}
+
+export function PaginationControls({ testIdPrefix, page, totalPages, total, singular = 'item', plural = 'items', onPageChange }) {
+  if (totalPages <= 1) return null
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-[#232833] px-4 py-3">
+      <span className="num text-xs text-[#8d97a6]">Page {page + 1} of {totalPages} · {total} {total === 1 ? singular : plural}</span>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          className="btn btn-ghost !px-2"
+          disabled={page === 0}
+          onClick={() => onPageChange(page - 1)}
+          data-testid={`${testIdPrefix}-page-prev`}
+        >
+          ← Previous
+        </button>
+        <button
+          type="button"
+          className="btn btn-ghost !px-2"
+          disabled={page >= totalPages - 1}
+          onClick={() => onPageChange(page + 1)}
+          data-testid={`${testIdPrefix}-page-next`}
+        >
+          Next →
+        </button>
+      </div>
+    </div>
+  )
+}

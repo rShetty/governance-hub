@@ -65,11 +65,13 @@ test('MCP full lifecycle: install wizard → grant → policy → verify access 
   await expect(page.getByText(policyName)).toBeVisible({ timeout: 10000 })
 
   // ── STEP 5: Simulate a tool call against this server's resource ──
+  await page.getByTestId('policy-name').fill(serverName)
+  await page.getByTestId('policy-actions').fill('call')
+  await page.getByTestId('policy-resources').fill(`${serverId}/*`)
   await page.getByTestId('simulate-action').fill('call')
   await page.getByTestId('simulate-resource').fill(`${serverId}/read_data`)
-  await page.getByTestId('simulate-yaml').fill(`- name: allow-${serverName}\n  actions: ["call"]\n  resources: ["${serverId}/*"]\n  decision: allow`)
   await page.getByTestId('simulate-run').click()
-  await expect(page.getByTestId('simulation-result')).toContainText('"decision": "allow"')
+  await expect(page.getByTestId('simulation-result')).toContainText('ALLOW')
 
   // ── STEP 6: Verify catalog shows server with authorized agents ──
   await page.getByRole('button', { name: 'Tools & MCP' }).click()

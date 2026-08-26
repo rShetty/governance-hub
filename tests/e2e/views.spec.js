@@ -38,7 +38,7 @@ test('Tools & MCP: Relay health card and MCP catalogue render', async ({ page })
 
 test('Access: Patroclus policies listed with engine badges', async ({ page }) => {
   await page.getByRole('button', { name: 'Access' }).click()
-  await expect(page.getByRole('heading', { name: 'Access' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Access', exact: true })).toBeVisible()
   await expect(page.getByText(/Active policies/i)).toBeVisible({ timeout: 15000 })
   await expect(page.getByText('allow-github')).toBeVisible({ timeout: 15000 })
 })

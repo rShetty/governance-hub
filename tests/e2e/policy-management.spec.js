@@ -6,5 +6,5 @@ test('Access operators can inspect saved policy definitions', async ({ page }) =
 
   await expect(page.getByTestId('policy-pol_e2e_001')).toBeVisible()
   await page.getByTestId('inspect-policy-pol_e2e_001').click()
-  await expect(page.getByText(/Policy allow-github:/)).toBeVisible()
+  await expect(page.getByText('Policy allow-github')).toBeVisible()
 })

@@ -23,7 +23,7 @@ test('Final verification: admin completes every major governance domain in the H
 
   // Access
   await page.getByRole('button', { name: 'Access' }).click()
-  await expect(page.getByTestId('policy-simulator')).toBeVisible()
+  await expect(page.getByTestId('policy-builder')).toBeVisible()
 
   // Orchestration
   await page.getByRole('button', { name: 'Orchestration' }).click()

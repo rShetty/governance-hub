@@ -9,7 +9,14 @@ export default function Access() {
   const [message, setMessage] = useState(null)
   const [selectedSession, setSelectedSession] = useState(null)
   const [resources, setResources] = useState([])
-  const [simulation, setSimulation] = useState({ action: 'call', resource: 'mcp/*', definition: '', result: null })
+  const [policyDraft, setPolicyDraft] = useState({
+    name: '',
+    effect: 'allow',
+    actions: ['call'],
+    resources: [],
+    reason: '',
+  })
+  const [simulation, setSimulation] = useState({ action: 'call', resource: '', result: null })
   const toast = useToast()
   const [approvalDialog, setApprovalDialog] = useState(null)
   const [tokenDialog, setTokenDialog] = useState(null)
@@ -129,11 +136,48 @@ export default function Access() {
         action: simulation.action,
         resource: simulation.resource,
         requested_scopes: [],
-        definition: simulation.definition,
+        definition: draftYaml(policyDraft),
       }),
     })
     const body = await response.json().catch(() => ({}))
     setSimulation((current) => ({ ...current, result: response.ok ? body : { error: body.error } }))
+  }
+
+  const updateRule = (patch) => {
+    setPolicyDraft((current) => ({ ...current, ...patch }))
+  }
+
+  const draftYaml = (draft) => [
+    '- name: ' + JSON.stringify(draft.name || 'untitled-policy'),
+    `  actions: ${JSON.stringify(draft.actions.filter(Boolean))}`,
+    `  resources: ${JSON.stringify(draft.resources.filter(Boolean))}`,
+    `  decision: ${draft.effect}`,
+    ...(draft.reason.trim() ? [`  reason: ${JSON.stringify(draft.reason.trim())}`] : []),
+  ].join('\n')
+
+  const policyDraftValid = policyDraft.name.trim().length >= 3
+    && policyDraft.actions.some((action) => action.trim())
+    && policyDraft.resources.some((resource) => resource.trim())
+
+  const savePolicy = async () => {
+    if (!policyDraftValid) return
+    const response = await fetch('/api/bff/policies', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: policyDraft.name.trim(),
+        engine: 'yaml',
+        definition: draftYaml(policyDraft),
+      }),
+    })
+    const body = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      toast.error(body.error || 'Policy creation failed.')
+      return
+    }
+    toast.success(`Policy ${policyDraft.name} saved.`)
+    setPolicyDraft({ name: '', effect: 'allow', actions: ['call'], resources: [], reason: '' })
+    loadPolicies()
   }
 
   const list = Array.isArray(policies)
@@ -277,19 +321,82 @@ export default function Access() {
         />
       )}
 
-      <form className="panel p-5 space-y-3" data-testid="policy-simulator" onSubmit={runSimulation}>
-        <h2 className="font-semibold">Policy simulator</h2>
-        <p className="text-xs text-slate-500">Advisory preview against the YAML below; Patroclus remains the enforcement authority.</p>
-        <div className="grid md:grid-cols-2 gap-3">
-          <input data-testid="simulate-action" value={simulation.action} onChange={(event) => setSimulation({ ...simulation, action: event.target.value })} />
-          <input data-testid="simulate-resource" value={simulation.resource} onChange={(event) => setSimulation({ ...simulation, resource: event.target.value })} />
+      <section className="panel p-6 space-y-5" data-testid="policy-builder">
+        <div>
+          <h2 className="font-semibold text-lg">Create access policy</h2>
+          <p className="mt-1 text-sm text-[#aeb7c4]">Define who can act on what. The generated policy is validated and previewed before saving.</p>
         </div>
-          <textarea data-testid="simulate-yaml" rows="5" placeholder="YAML policy rules" value={simulation.definition} onChange={(event) => setSimulation({ ...simulation, definition: event.target.value })} />
-        <button className="btn btn-primary" data-testid="simulate-run">Simulate</button>
-        {simulation.result && (
-          <pre className="text-xs text-slate-300" data-testid="simulation-result">{JSON.stringify(simulation.result, null, 2)}</pre>
-        )}
-      </form>
+
+        <form className="grid gap-5" onSubmit={(event) => { event.preventDefault(); runSimulation(event) }}>
+          <label className="grid gap-2">
+            <span className="label">Policy name</span>
+            <input data-testid="policy-name" value={policyDraft.name} onChange={(event) => updateRule({ name: event.target.value })} placeholder="allow-github-read" required minLength={3} />
+          </label>
+
+          <fieldset className="grid gap-3">
+            <legend className="label mb-2">Decision</legend>
+            <div className="flex flex-wrap gap-3">
+              {['allow', 'deny'].map((effect) => (
+                <button
+                  key={effect}
+                  type="button"
+                  onClick={() => updateRule({ effect })}
+                  className={`btn ${policyDraft.effect === effect ? (effect === 'allow' ? 'btn-primary' : 'btn-danger') : ''}`}
+                  data-testid={`policy-effect-${effect}`}
+                >
+                  {effect === 'allow' ? 'Allow' : 'Deny'}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
+          <label className="grid gap-2">
+            <span className="label">Actions</span>
+            <input data-testid="policy-actions" value={policyDraft.actions.join(',')} onChange={(event) => updateRule({ actions: event.target.value.split(',').map((item) => item.trim()) })} placeholder="call, read" />
+            <span className="text-xs text-[#8d97a6]">Comma separated. Use * only when the intent is intentionally broad.</span>
+          </label>
+
+          <label className="grid gap-2">
+            <span className="label">Resources</span>
+            <input data-testid="policy-resources" value={policyDraft.resources.join(',')} onChange={(event) => updateRule({ resources: event.target.value.split(',').map((item) => item.trim()) })} placeholder="mcp/github/*" />
+            <span className="text-xs text-[#8d97a6]">Comma separated resource patterns.</span>
+          </label>
+
+          <label className="grid gap-2">
+            <span className="label">Business reason</span>
+            <input data-testid="policy-reason" value={policyDraft.reason} onChange={(event) => updateRule({ reason: event.target.value })} placeholder="Why this exception exists" />
+          </label>
+
+          <div className="inset grid gap-3 p-4">
+            <div className="grid gap-2 md:grid-cols-2">
+              <label className="grid gap-2">
+                <span className="label">Simulate action</span>
+                <input data-testid="simulate-action" value={simulation.action} onChange={(event) => setSimulation({ ...simulation, action: event.target.value })} />
+              </label>
+              <label className="grid gap-2">
+                <span className="label">Simulate resource</span>
+                <input data-testid="simulate-resource" value={simulation.resource} onChange={(event) => setSimulation({ ...simulation, resource: event.target.value })} />
+              </label>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <button type="submit" className="btn" disabled={!policyDraftValid} data-testid="simulate-run">Preview decision</button>
+              <button type="button" className="btn btn-primary" disabled={!policyDraftValid || !simulation.result} onClick={savePolicy} data-testid="policy-save">Save policy</button>
+              {!policyDraftValid && <span className="text-sm text-[#fbbf24]">Name, action, and at least one resource are required.</span>}
+            </div>
+            {simulation.result && (
+              <div className={`rounded-xl border p-4 ${simulation.result.decision === 'allow' ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-rose-500/30 bg-rose-500/10'}`} data-testid="simulation-result">
+                <strong>{String(simulation.result.decision).toUpperCase()}</strong>
+                <p className="mt-1 text-sm">{simulation.result.reason}</p>
+              </div>
+            )}
+          </div>
+
+          <details className="inset rounded-xl p-4">
+            <summary className="cursor-pointer label">Review generated definition</summary>
+            <pre className="mt-3 overflow-auto text-xs font-mono text-[#c9d1de]" data-testid="policy-definition">{draftYaml(policyDraft)}</pre>
+          </details>
+        </form>
+      </section>
 
       {message && <div className={message.ok ? 'text-sm text-teal-300' : 'text-sm text-rose-400'}>{message.text}</div>}
       <section className="panel overflow-hidden">
@@ -305,10 +412,11 @@ export default function Access() {
                 <td className="text-slate-200">{p.name}</td>
                 <td><span className="badge badge-mono !text-[10px]">{p.engine}</span></td>
                 <td><span className="badge badge-ok">{p.status ?? 'active'}</span></td>
-                <td><button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`inspect-policy-${p.id ?? p.name}`} onClick={() => {
-                  const policy = list.find((item) => String(item.id) === String(p.id ?? p.name))
-                  setMessage({ ok: !!policy, text: policy ? `Policy ${policy.name}: ${String(policy.definition ?? '').slice(0, 240)}` : 'Policy definition unavailable.' })
-                }}>Inspect</button></td>
+                    <td><button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`inspect-policy-${p.id ?? p.name}`} onClick={() => {
+                      const policy = list.find((item) => String(item.id) === String(p.id ?? p.name))
+                      setSimulation((current) => ({ ...current, action: current.action, resource: current.resource, result: null }))
+                      setMessage({ ok: !!policy, text: policy ? `Policy ${policy.name}` : 'Policy definition unavailable.' })
+                    }}>Details</button></td>
               </tr>
             ))}
             {!list.length && !err && (
