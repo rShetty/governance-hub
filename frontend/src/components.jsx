@@ -243,6 +243,80 @@ export function PromptDialog({ open, title, description, fields, submitLabel = '
   )
 }
 
+export function WizardModal({
+  open,
+  title,
+  description,
+  steps,
+  activeStep,
+  onStepChange,
+  onNext,
+  onBack,
+  onFinish,
+  canContinue = true,
+  busy = false,
+  finishLabel = 'Create',
+  children,
+  onCancel,
+}) {
+  const stepMeta = steps[activeStep]
+  const isLast = activeStep === steps.length - 1
+  return (
+    <div className="dialog-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onCancel?.()}>
+      <section className="dialog dialog-wizard" role="dialog" aria-modal="true" aria-labelledby="wizard-title" data-testid="hub-wizard">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 id="wizard-title" className="h-display text-lg">{title}</h2>
+            {description && <p className="mt-1 text-sm text-[#b7c0cd]">{description}</p>}
+          </div>
+          <button type="button" className="btn btn-ghost" onClick={onCancel} aria-label="Close wizard">✕</button>
+        </div>
+
+      <div className="mb-5 flex items-center gap-2" data-testid="wizard-stepper">
+        {steps.map((label, index) => (
+          <div key={label} className="flex items-center gap-2">
+            <span
+              className={`grid h-7 w-7 place-items-center rounded-full border text-xs font-bold ${
+                index < activeStep
+                  ? 'border-teal-500/40 bg-teal-500/15 text-teal-300'
+                  : index === activeStep
+                    ? 'border-indigo-500/50 bg-indigo-500/15 text-indigo-300'
+                    : 'border-[#232833] text-[#6b7484]'
+              }`}
+              aria-current={index === activeStep ? 'step' : undefined}
+            >
+              {index + 1}
+            </span>
+            <span className={`text-xs font-semibold ${index === activeStep ? 'text-white' : 'text-[#8d97a6]'}`}>{label}</span>
+            {index < steps.length - 1 && <span className="mx-1 h-px w-6 bg-[#232833]" aria-hidden />}
+          </div>
+        ))}
+      </div>
+
+      <form
+        onSubmit={(event) => {
+          event.preventDefault()
+          isLast ? onFinish?.() : onNext?.()
+        }}
+        className="grid gap-5"
+      >
+        <h3 className="text-base font-semibold text-white" data-testid="wizard-step-label">{stepMeta}</h3>
+        {children}
+
+        <div className="mt-2 flex items-center justify-between gap-3">
+          <button type="button" className="btn" onClick={onBack} disabled={activeStep === 0 || busy}>
+            ← Back
+          </button>
+          <button type="submit" className={`btn ${isLast ? 'btn-primary' : ''}`} disabled={!canContinue || busy} data-testid={isLast ? 'wizard-finish' : 'wizard-next'}>
+            {busy ? 'Working…' : isLast ? finishLabel : 'Continue'}
+          </button>
+        </div>
+      </form>
+      </section>
+    </div>
+  )
+}
+
 let toastSequence = 0
 
 export function ToastProvider({ children }) {

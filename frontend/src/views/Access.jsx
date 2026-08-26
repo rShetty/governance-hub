@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ConfirmDialog, PromptDialog, ResourceSelect, useToast } from '../components.jsx'
+import { ConfirmDialog, PromptDialog, ResourceSelect, useToast, WizardModal } from '../components.jsx'
 
 export default function Access() {
   const [policies, setPolicies] = useState(null)
@@ -23,6 +23,8 @@ export default function Access() {
   const [busyAction, setBusyAction] = useState('')
   const [killSessionId, setKillSessionId] = useState(null)
   const [grantDialog, setGrantDialog] = useState(null)
+  const [policyWizard, setPolicyWizard] = useState(false)
+  const [policyStep, setPolicyStep] = useState(0)
   const [agents, setAgents] = useState([])
 
   const loadPolicies = () => {
@@ -321,34 +323,47 @@ export default function Access() {
         />
       )}
 
-      <section className="panel p-6 space-y-5" data-testid="policy-builder">
-        <div>
-          <h2 className="font-semibold text-lg">Create access policy</h2>
-          <p className="mt-1 text-sm text-[#aeb7c4]">Define who can act on what. The generated policy is validated and previewed before saving.</p>
-        </div>
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold">Access policies</h2>
+        <button type="button" className="btn btn-primary" data-testid="open-policy-wizard" onClick={() => { setPolicyWizard(true); setPolicyStep(0) }}>Create policy</button>
+      </div>
 
-        <form className="grid gap-5" onSubmit={(event) => { event.preventDefault(); runSimulation(event) }}>
+      {policyWizard && (
+      <WizardModal
+        open={policyWizard}
+        title="Create access policy"
+        description="A guided, validated workflow. Patroclus remains the enforcement authority."
+        steps={['Policy', 'Scope', 'Review']}
+        activeStep={policyStep}
+        onNext={() => {
+          if (policyStep === 0) setSimulation({ action: policyDraft.actions[0] || 'call', resource: policyDraft.resources[0] || '', result: null })
+          setPolicyStep((step) => step + 1)
+        }}
+        onBack={() => setPolicyStep((step) => Math.max(0, step - 1))}
+        onFinish={savePolicy}
+        canContinue={policyStep === 0 ? policyDraft.name.trim().length >= 3 : policyDraftValid}
+        busy={busyAction === 'policy'}
+        finishLabel="Save policy"
+        onCancel={() => setPolicyWizard(false)}
+      >
+        <form className="grid gap-5" onSubmit={(event) => { event.preventDefault(); if (policyStep < 2) { if (policyStep === 0) setSimulation({ action: policyDraft.actions[0] || 'call', resource: policyDraft.resources[0] || '', result: null }); setPolicyStep(policyStep + 1) } }}>
           <label className="grid gap-2">
             <span className="label">Policy name</span>
             <input data-testid="policy-name" value={policyDraft.name} onChange={(event) => updateRule({ name: event.target.value })} placeholder="allow-github-read" required minLength={3} />
           </label>
 
-          <fieldset className="grid gap-3">
-            <legend className="label mb-2">Decision</legend>
-            <div className="flex flex-wrap gap-3">
-              {['allow', 'deny'].map((effect) => (
-                <button
-                  key={effect}
-                  type="button"
-                  onClick={() => updateRule({ effect })}
-                  className={`btn ${policyDraft.effect === effect ? (effect === 'allow' ? 'btn-primary' : 'btn-danger') : ''}`}
-                  data-testid={`policy-effect-${effect}`}
-                >
-                  {effect === 'allow' ? 'Allow' : 'Deny'}
-                </button>
-              ))}
-            </div>
-          </fieldset>
+          {policyStep >= 1 && (
+            <>
+              <fieldset className="grid gap-3">
+                <legend className="label mb-2">Decision</legend>
+                <div className="flex flex-wrap gap-3">
+                  {['allow', 'deny'].map((effect) => (
+                    <button key={effect} type="button" onClick={() => updateRule({ effect })} className={`btn ${policyDraft.effect === effect ? (effect === 'allow' ? 'btn-primary' : 'btn-danger') : ''}`} data-testid={`policy-effect-${effect}`}>
+                      {effect === 'allow' ? 'Allow' : 'Deny'}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
 
           <label className="grid gap-2">
             <span className="label">Actions</span>
@@ -356,47 +371,44 @@ export default function Access() {
             <span className="text-xs text-[#8d97a6]">Comma separated. Use * only when the intent is intentionally broad.</span>
           </label>
 
-          <label className="grid gap-2">
-            <span className="label">Resources</span>
-            <input data-testid="policy-resources" value={policyDraft.resources.join(',')} onChange={(event) => updateRule({ resources: event.target.value.split(',').map((item) => item.trim()) })} placeholder="mcp/github/*" />
-            <span className="text-xs text-[#8d97a6]">Comma separated resource patterns.</span>
-          </label>
+            <label className="grid gap-2">
+              <span className="label">Resources</span>
+              <input data-testid="policy-resources" value={policyDraft.resources.join(',')} onChange={(event) => updateRule({ resources: event.target.value.split(',').map((item) => item.trim()) })} placeholder="mcp/github/*" />
+              <span className="text-xs text-[#8d97a6]">Comma separated resource patterns.</span>
+            </label>
+          </>
+          )}
 
-          <label className="grid gap-2">
-            <span className="label">Business reason</span>
-            <input data-testid="policy-reason" value={policyDraft.reason} onChange={(event) => updateRule({ reason: event.target.value })} placeholder="Why this exception exists" />
-          </label>
+          {policyStep === 2 && (
+          <>
+            <label className="grid gap-2"><span className="label">Business reason</span><input data-testid="policy-reason" value={policyDraft.reason} onChange={(event) => updateRule({ reason: event.target.value })} placeholder="Why this exception exists" /></label>
 
-          <div className="inset grid gap-3 p-4">
-            <div className="grid gap-2 md:grid-cols-2">
-              <label className="grid gap-2">
-                <span className="label">Simulate action</span>
-                <input data-testid="simulate-action" value={simulation.action} onChange={(event) => setSimulation({ ...simulation, action: event.target.value })} />
-              </label>
-              <label className="grid gap-2">
-                <span className="label">Simulate resource</span>
-                <input data-testid="simulate-resource" value={simulation.resource} onChange={(event) => setSimulation({ ...simulation, resource: event.target.value })} />
-              </label>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <button type="submit" className="btn" disabled={!policyDraftValid} data-testid="simulate-run">Preview decision</button>
-              <button type="button" className="btn btn-primary" disabled={!policyDraftValid || !simulation.result} onClick={savePolicy} data-testid="policy-save">Save policy</button>
-              {!policyDraftValid && <span className="text-sm text-[#fbbf24]">Name, action, and at least one resource are required.</span>}
-            </div>
-            {simulation.result && (
-              <div className={`rounded-xl border p-4 ${simulation.result.decision === 'allow' ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-rose-500/30 bg-rose-500/10'}`} data-testid="simulation-result">
-                <strong>{String(simulation.result.decision).toUpperCase()}</strong>
-                <p className="mt-1 text-sm">{simulation.result.reason}</p>
+            <div className="inset grid gap-4 p-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="grid gap-2"><span className="label">Simulate action</span><input data-testid="simulate-action" value={simulation.action} onChange={(event) => setSimulation({ ...simulation, action: event.target.value })} /></label>
+                <label className="grid gap-2"><span className="label">Simulate resource</span><input data-testid="simulate-resource" value={simulation.resource} onChange={(event) => setSimulation({ ...simulation, resource: event.target.value })} /></label>
               </div>
-            )}
-          </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <button type="button" className="btn" disabled={!policyDraftValid} onClick={() => runSimulation({ preventDefault() {} })} data-testid="simulate-run">Preview decision</button>
+                {!simulation.result && <span className="text-sm text-[#8d97a6]">Preview before saving.</span>}
+              </div>
+              {simulation.result && (
+                <div className={`rounded-xl border p-4 ${simulation.result.decision === 'allow' ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-rose-500/30 bg-rose-500/10'}`} data-testid="simulation-result">
+                  <strong>{String(simulation.result.decision).toUpperCase()}</strong>
+                  <p className="mt-1 text-sm">{simulation.result.reason}</p>
+                </div>
+              )}
+            </div>
 
-          <details className="inset rounded-xl p-4">
-            <summary className="cursor-pointer label">Review generated definition</summary>
-            <pre className="mt-3 overflow-auto text-xs font-mono text-[#c9d1de]" data-testid="policy-definition">{draftYaml(policyDraft)}</pre>
-          </details>
+            <details className="inset rounded-xl p-4" open>
+              <summary className="cursor-pointer label">Generated definition</summary>
+              <pre className="mt-3 overflow-auto text-xs font-mono text-[#c9d1de]" data-testid="policy-definition">{draftYaml(policyDraft)}</pre>
+            </details>
+          </>
+          )}
         </form>
-      </section>
+      </WizardModal>
+      )}
 
       {message && <div className={message.ok ? 'text-sm text-teal-300' : 'text-sm text-rose-400'}>{message.text}</div>}
       <section className="panel overflow-hidden">

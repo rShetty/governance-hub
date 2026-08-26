@@ -65,9 +65,13 @@ test('MCP full lifecycle: install wizard → grant → policy → verify access 
   await expect(page.getByText(policyName)).toBeVisible({ timeout: 10000 })
 
   // ── STEP 5: Simulate a tool call against this server's resource ──
+  await page.getByTestId('open-policy-wizard').click()
+  await expect(page.getByTestId('hub-wizard')).toBeVisible()
   await page.getByTestId('policy-name').fill(serverName)
+  await page.getByTestId('wizard-next').click()
   await page.getByTestId('policy-actions').fill('call')
   await page.getByTestId('policy-resources').fill(`${serverId}/*`)
+  await page.getByTestId('wizard-next').click()
   await page.getByTestId('simulate-action').fill('call')
   await page.getByTestId('simulate-resource').fill(`${serverId}/read_data`)
   await page.getByTestId('simulate-run').click()

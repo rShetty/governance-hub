@@ -249,6 +249,9 @@ a { color: var(--accent); }
   border: 1px solid #303744;
   box-shadow: 0 24px 60px rgb(0 0 0 / 48%);
 }
+.dialog-wizard {
+  width: min(720px, 100%);
+}
 
 .mobile-data-list { display: grid; gap: 10px; }
 @media (max-width: 767px) {
