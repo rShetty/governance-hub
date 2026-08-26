@@ -116,6 +116,12 @@ const server = http.createServer(async (request, response) => {
     return send(response, 200, { humans: [], agents: identities })
   }
 
+  if (path === '/api/bff/directory/agents') {
+    return send(response, 200, {
+      agents: identities.map(({ id, name, status }) => ({ id, name, status })),
+    })
+  }
+
   if (path === '/api/bff/mcp' && request.method === 'GET') {
     return send(response, 200, mcpServers)
   }
@@ -326,14 +332,16 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (path === '/api/bff/access/sessions/ses_e2e_001/kill' && request.method === 'POST') {
+    if (!sessions.length) sessions.push({ id: 'ses_e2e_001', agent_id: 'agt_e2e_001', active: true })
     sessions.length = 0
+    sessions.push({ id: 'ses_e2e_001', agent_id: 'agt_e2e_001', active: true })
     return send(response, 200, { result: { killed: true } })
   }
 
-  if (path === '/api/bff/agents/00000000-0000-0000-0000-000000000009/emergency-kill' && request.method === 'POST') {
+  if (path.match(/^\/api\/bff\/agents\/[^/]+\/emergency-kill$/) && request.method === 'POST') {
     let raw = ''
     request.on('data', chunk => { raw += chunk })
-    request.on('end', () => send(response, 200, JSON.parse(raw || '{}')))
+    request.on('end', () => send(response, 200, { operator: 'e2e@governance.test', ...(JSON.parse(raw || '{}')) }))
     return
   }
 
@@ -448,8 +456,10 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
-  if (path === '/api/bff/agents/00000000-0000-0000-0000-000000000009/restore' && request.method === 'POST') {
-    return send(response, 200, { agent_id: '00000000-0000-0000-0000-000000000009', status: 'restored' })
+  if (/^\/(api\/bff\/)?(v1\/admin\/)?agents\/([^/]+)\/restore$/.test(path) && request.method === 'POST') {
+    const parts = path.split('/')
+    const agentId = parts.at(-2)
+    return send(response, 200, { agent_id: agentId, status: 'restored' })
   }
 
   if (path === '/api/bff/risk/remediations' && request.method === 'POST') {
@@ -567,7 +577,7 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
-  if (path === '/api/bff/runtime-agents/agent_e2e_001/health' && request.method === 'GET') {
+  if (path.match(/^\/api\/bff\/runtime-agents\/[^/]+\/health$/) && request.method === 'GET') {
     return send(response, 200, { status: 'healthy' })
   }
 
@@ -752,7 +762,8 @@ const server = http.createServer(async (request, response) => {
     return send(response, 404, { error: 'fixture endpoint not implemented' })
   }
 
-  const requested = normalize(path).replace(/^([/\\])+/, '')
+  const isAssetPath = /\.[a-z0-9]+$/i.test(path)
+  const requested = (isAssetPath ? normalize(path) : '/index.html').replace(/^([/\\])+/, '')
   const target = join(root, requested || 'index.html')
   if (!target.startsWith(root)) return send(response, 403, 'forbidden', 'text/plain')
   try {
@@ -766,8 +777,9 @@ const server = http.createServer(async (request, response) => {
     try {
       response.writeHead(200, { 'content-type': 'text/html' })
       response.end(await readFile(join(root, 'index.html')))
-    } catch {
-      send(response, 404, 'build frontend/dist first', 'text/plain')
+    } catch (error) {
+      if (!response.headersSent) response.writeHead(500, { 'content-type': 'text/plain' })
+      if (!response.writableEnded) response.end(`build frontend/dist first: ${error.message}`)
     }
   }
 })

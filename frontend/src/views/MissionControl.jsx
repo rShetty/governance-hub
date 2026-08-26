@@ -1,5 +1,21 @@
 import { useEffect, useState } from 'react'
 import { fetchServices, svcGet } from '../api.js'
+import { PageHeader } from '../components.jsx'
+
+const QUICK_ACTIONS = [
+  { label: 'Install MCP server', description: 'Register a provider with CIMD or dynamic registration.', target: '/tools' },
+  { label: 'Open approvals', description: 'Approvals, live sessions, and policy simulation.', target: '/access' },
+  { label: 'Create machine identity', description: 'Scoped machine principal with one-time secret.', target: '/agents' },
+  { label: 'Show compliance evidence', description: 'Framework evidence, coverage, and gaps.', target: '/compliance' },
+]
+
+const KPI_TARGETS = {
+  'Backends up': '/services',
+  'Agent identities': '/agents',
+  'Spend today': '/cost',
+  'Open alerts': '/security',
+  'Critical signals': '/activity',
+}
 
 function useFleet() {
   const [services, setServices] = useState(null)
@@ -42,57 +58,97 @@ function HealthRow({ s }) {
   )
 }
 
+function KpiCard({ label, value, helper, tone = '#f3f6fb', navigate }) {
+  return (
+    <button type="button" className="action-card" onClick={() => navigate?.(KPI_TARGETS[label])} data-testid={`kpi-${label.toLowerCase().replace(/[^a-z]+/g, '-')}`}>
+      <span className="label">{label}</span>
+      <span className="num text-3xl leading-none" style={{ color: tone }}>{value ?? '—'}</span>
+      <span className="text-xs text-[#8d97a6]">{helper}</span>
+      <span className="mt-auto text-sm font-semibold text-teal-300">Manage →</span>
+    </button>
+  )
+}
+
 export default function MissionControl() {
   const { services, err, kpi, signals } = useFleet()
   const list = services?.services ?? []
   const up = list.filter((s) => s.healthy).length
   const criticalSignals = signals.filter((signal) => /violation|blocked|revoked|critical/i.test(String(signal.kind))).length
 
-  return (
-    <div className="space-y-6 max-w-[1400px]">
-      <div>
-        <h1 className="h-display text-[30px] leading-tight">Mission Control</h1>
-        <p className="text-[13px] text-slate-500 mt-1">Operational posture, governance risk, and control coverage in one place.</p>
-      </div>
+  const attentionItems = [
+    ...list.filter((service) => !service.healthy).map((service) => ({
+      id: `service-${service.id}`,
+      title: `${service.label} is down`,
+      description: service.detail || 'The backend did not respond to the latest health probe.',
+      severity: 'critical',
+      actionLabel: 'Open registry',
+      target: '/services',
+    })),
+    ...signals.filter((signal) => /violation|blocked|revoked|critical/i.test(String(signal.kind))).slice(0, 5).map((signal, index) => ({
+      id: `signal-${index}`,
+      title: String(signal.kind),
+      description: signal.summary || `Source: ${signal.source}`,
+      severity: signal.severity || 'high',
+      actionLabel: 'Inspect activity',
+      target: signal.session_id ? `/activity?session_id=${encodeURIComponent(signal.session_id)}` : '/activity',
+    })),
+  ]
 
-      {/* KPI strip */}
-      <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
-        <div className="panel p-5 flex flex-col justify-between min-h-[124px]">
-          <div className="label mb-2">Backends up</div>
-          <div>
-          <div className="num text-[32px] leading-none text-slate-100">{services ? `${up}/${list.length}` : '—'}</div>
-            <div className="text-xs text-slate-600 mt-2">live fleet health</div>
+  const goTo = (target) => {
+    const routeId = target.split('?')[0].replace('/', '') || 'mission'
+    window.history.pushState({ id: routeId }, '', target)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  }
+
+  return (
+    <div className="space-y-7">
+      <PageHeader
+        title="Mission Control"
+        description="Operational posture, prioritized risk, and direct remediation paths for the governance control plane."
+      />
+
+      <section aria-labelledby="attention-heading">
+        <h2 id="attention-heading" className="h-display mb-4 text-xl">Attention required</h2>
+        {attentionItems.length ? (
+          <div className="panel overflow-hidden" data-testid="attention-required">
+            {attentionItems.map((item) => (
+              <article key={item.id} className="attention-item">
+                <span className={`badge ${item.severity === 'critical' ? 'badge-crit' : 'badge-warn'}`}>{item.severity}</span>
+                <div className="attention-item-main flex-1">
+                  <p className="attention-item-title">{item.title}</p>
+                  <p className="attention-item-description text-sm">{item.description}</p>
+                </div>
+                <button type="button" className="btn" onClick={() => goTo(item.target)}>{item.actionLabel}</button>
+              </article>
+            ))}
           </div>
-        </div>
-        <div className="panel p-5 flex flex-col justify-between min-h-[124px]">
-          <div className="label mb-2">Agent identities</div>
-          <div>
-            <div className="num text-[32px] leading-none text-slate-100">{kpi.agents ?? '—'}</div>
-            <div className="text-xs text-slate-600 mt-2">machine principals</div>
+        ) : (
+          <div className="panel p-6" data-testid="attention-clear">
+            <p className="text-sm text-[#c9d1de]">No critical items require immediate action.</p>
           </div>
+        )}
+      </section>
+
+      <section aria-label="Quick actions">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {QUICK_ACTIONS.map((action) => (
+            <button key={action.label} type="button" className="action-card" onClick={() => goTo(action.target)}>
+              <span className="action-card-title">{action.label}</span>
+              <span className="action-card-description text-sm">{action.description}</span>
+            </button>
+          ))}
         </div>
-        <div className="panel p-5 flex flex-col justify-between min-h-[124px]">
-          <div className="label mb-2">Spend today</div>
-          <div>
-            <div className="num text-[32px] leading-none text-teal-300">{kpi.spend ?? '—'}</div>
-            <div className="text-xs text-slate-600 mt-2">routing keys active</div>
-          </div>
+      </section>
+
+      <section aria-label="Governance metrics">
+        <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
+          <KpiCard navigate={goTo} label="Backends up" value={services ? `${up}/${list.length}` : null} helper="live fleet health" />
+          <KpiCard navigate={goTo} label="Agent identities" value={kpi.agents} helper="machine principals" />
+          <KpiCard navigate={goTo} label="Spend today" value={kpi.spend} helper="routing keys active" tone="#5eead4" />
+          <KpiCard navigate={goTo} label="Open alerts" value={kpi.alerts} helper="recent risk events" tone={Number(kpi.alerts) > 0 ? '#fbbf24' : undefined} />
+          <KpiCard navigate={goTo} label="Critical signals" value={signals.length ? criticalSignals : null} helper="require review" tone={criticalSignals > 0 ? '#f87171' : undefined} />
         </div>
-        <div className="panel p-5 flex flex-col justify-between min-h-[124px]">
-          <div className="label mb-2">Open alerts</div>
-          <div>
-            <div className={`num text-[32px] leading-none ${Number(kpi.alerts) > 0 ? 'text-amber-300' : 'text-slate-100'}`}>{kpi.alerts ?? '—'}</div>
-            <div className="text-xs text-slate-600 mt-2">recent risk events</div>
-          </div>
-        </div>
-        <div className="panel p-5 flex flex-col justify-between min-h-[124px]">
-          <div className="label mb-2">Critical signals</div>
-          <div>
-            <div className={`num text-[32px] leading-none ${criticalSignals > 0 ? 'text-rose-300' : 'text-slate-100'}`}>{signals.length ? criticalSignals : '—'}</div>
-            <div className="text-xs text-slate-600 mt-2">require review</div>
-          </div>
-        </div>
-      </div>
+      </section>
 
       {err && (
         <div className="panel p-4 text-sm text-rose-300 border-rose-500/30">{err}</div>

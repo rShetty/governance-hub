@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ConfirmDialog, PromptDialog, ResourceSelect, useToast } from '../components.jsx'
 
 export default function Access() {
   const [policies, setPolicies] = useState(null)
@@ -9,6 +10,13 @@ export default function Access() {
   const [selectedSession, setSelectedSession] = useState(null)
   const [resources, setResources] = useState([])
   const [simulation, setSimulation] = useState({ action: 'call', resource: 'mcp/*', definition: '', result: null })
+  const toast = useToast()
+  const [approvalDialog, setApprovalDialog] = useState(null)
+  const [tokenDialog, setTokenDialog] = useState(null)
+  const [busyAction, setBusyAction] = useState('')
+  const [killSessionId, setKillSessionId] = useState(null)
+  const [grantDialog, setGrantDialog] = useState(null)
+  const [agents, setAgents] = useState([])
 
   const loadPolicies = () => {
     fetch('/api/bff/policies')
@@ -32,6 +40,10 @@ export default function Access() {
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error(`status ${response.status}`))))
       .then((data) => setResources(Array.isArray(data) ? data : data.resources ?? []))
       .catch(() => setResources([]))
+    fetch('/api/bff/directory/agents')
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error(`status ${response.status}`))))
+      .then((data) => setAgents(data.agents ?? []))
+      .catch(() => setAgents([]))
   }, [])
 
   const createResource = async (event) => {
@@ -46,23 +58,36 @@ export default function Access() {
     setMessage({ ok: response.ok, text: response.ok ? `Resource ${body.name ?? body.id} created.` : body.error })
   }
 
-  const resolveApproval = async (approvalId) => {
-    const approverId = window.prompt('Patroclus principal UUID:')
-    if (!approverId) return
+  const resolveApproval = async (approvalId, reason = 'Approved from Governance Hub') => {
     const response = await fetch(`/api/bff/access/approvals/${approvalId}/resolve`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ approver_id: approverId, reason: 'Approved from Governance Hub' }),
+      body: JSON.stringify({ reason }),
     })
     const body = await response.json().catch(() => ({}))
     setMessage({ ok: response.ok, text: response.ok ? 'Approval resolved.' : body.error })
+    if (response.ok) { toast.success('Approval resolved.') } else { toast.error(body.error || 'Approval failed.') }
     if (response.ok) setApprovals((current) => current.filter((item) => item.id !== approvalId))
+  }
+
+  const issueDelegationWithAgent = async (agentId, scopes, expiresIn = 900) => {
+    const response = await fetch('/api/bff/access/delegations', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        agent_id: agentId,
+        scopes: scopes.split(',').map((scope) => scope.trim()).filter(Boolean),
+        expires_in_seconds: Number(expiresIn),
+      }),
+    })
+    const body = await response.json().catch(() => ({}))
+    if (response.ok) { toast.success(`Delegation ${body.grant_id} issued.`) } else { toast.error(body.error || 'Delegation failed.') }
   }
 
   const killSession = async (sessionId) => {
     const response = await fetch(`/api/bff/access/sessions/${sessionId}/kill`, { method: 'POST' })
     const body = await response.json().catch(() => ({}))
-    setMessage({ ok: response.ok, text: response.ok ? 'Session killed.' : body.error })
+    if (response.ok) { toast.success('Session killed.') } else { toast.error(body.error || 'Kill failed.') }
     if (response.ok) setSessions((current) => current.filter((item) => (item.id ?? item.session_id) !== sessionId))
   }
 
@@ -72,11 +97,9 @@ export default function Access() {
     setSelectedSession(response.ok ? body : { error: body.error || `status ${response.status}` })
   }
 
-  const revokeToken = async () => {
-    const tokenId = window.prompt('Token JTI:')
-    if (!tokenId?.trim()) return
-    const reason = window.prompt('Required revocation reason:')
-    if (!reason?.trim()) return
+  const revokeToken = async (dialogValues) => {
+    const { token_id: tokenId, reason } = dialogValues ?? tokenDialog?.values ?? {}
+    if (!tokenId || !reason) return
     const response = await fetch(`/api/bff/access/tokens/${encodeURIComponent(tokenId)}/revoke`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -84,30 +107,17 @@ export default function Access() {
     })
     const body = await response.json().catch(() => ({}))
     setMessage({ ok: response.ok, text: response.ok ? `Token ${tokenId} revoked.` : body.error })
+    if (response.ok) { toast.success(`Token ${tokenId} revoked.`) } else { toast.error(body.error || 'Revocation failed.') }
+    setTokenDialog(null)
   }
 
-  const issueDelegation = async (event) => {
-    event.preventDefault()
-    const form = event.currentTarget
-    const response = await fetch('/api/bff/access/delegations', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        agent_id: form.agent_id.value,
-        scopes: form.scopes.value.split(',').map((scope) => scope.trim()).filter(Boolean),
-        expires_in_seconds: Number(form.expires.value),
-      }),
-    })
-    const body = await response.json().catch(() => ({}))
-    setMessage({ ok: response.ok, text: response.ok ? `Delegation ${body.grant_id} issued. Token remains backend-issued and is not displayed.` : body.error })
-  }
-
-  const revokeGrant = async () => {
-    const grantId = window.prompt('Grant ID:')
+  const revokeGrant = async (dialogValues) => {
+    const { grant_id: grantId } = dialogValues ?? grantDialog?.values ?? {}
     if (!grantId?.trim()) return
     const response = await fetch(`/api/bff/access/grants/${encodeURIComponent(grantId)}/revoke`, { method: 'POST' })
     const body = await response.json().catch(() => ({}))
-    setMessage({ ok: response.ok, text: response.ok ? `Grant ${grantId} revoked.` : body.error })
+    if (response.ok) { toast.success(`Grant ${grantId} revoked.`) } else { toast.error(body.error || 'Revocation failed.') }
+    setGrantDialog(null)
   }
 
   const runSimulation = async (event) => {
@@ -146,7 +156,7 @@ export default function Access() {
         {approvals.length ? approvals.map((item) => (
           <div key={item.id} className="px-4 py-2 border-t border-[#232833]/60 flex items-center gap-2">
             <span className="text-xs font-mono text-slate-400">{item.id}</span>
-            <button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`approve-${item.id}`} onClick={() => resolveApproval(item.id)}>Approve</button>
+            <button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`approve-${item.id}`} onClick={() => setApprovalDialog({ id: item.id, values: {} })}>Approve</button>
           </div>
         )) : <div className="p-6 text-sm text-slate-600">No pending approvals.</div>}
       </section>
@@ -157,7 +167,7 @@ export default function Access() {
           <div key={session.id ?? session.session_id} className="px-4 py-2 border-t border-[#232833]/60 flex items-center gap-2">
             <span className="text-xs font-mono text-slate-400">{session.id ?? session.session_id}</span>
             <button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`inspect-${session.id ?? session.session_id}`} onClick={() => inspectSession(session.id ?? session.session_id)}>Inspect</button>
-            <button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`kill-${session.id ?? session.session_id}`} onClick={() => killSession(session.id ?? session.session_id)}>Kill</button>
+            <button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`kill-${session.id ?? session.session_id}`} onClick={() => setKillSessionId(session.id ?? session.session_id)}>Kill</button>
           </div>
         )) : <div className="p-6 text-sm text-slate-600" data-testid="no-sessions">No live sessions.</div>}
       </section>
@@ -176,7 +186,7 @@ export default function Access() {
       <section className="panel p-5" data-testid="token-revocation">
         <h2 className="font-semibold">Revoke token</h2>
         <p className="text-xs text-slate-500 mt-1">Immediately rejects the supplied JTI at Patroclus.</p>
-        <button className="btn btn-primary mt-3" onClick={revokeToken}>Select token</button>
+        <button className="btn btn-primary mt-3" data-testid="open-token-revocation" onClick={() => setTokenDialog({ values: {} })}>Revoke token</button>
       </section>
 
       <section className="panel overflow-hidden" data-testid="resource-list">
@@ -193,18 +203,79 @@ export default function Access() {
         <button className="btn btn-primary">Create</button>
       </form>
 
-      <form className="panel p-5 space-y-3" data-testid="delegation-form" onSubmit={issueDelegation}>
+      <form className="panel p-5 space-y-3" data-testid="delegation-form" onSubmit={(event) => {
+        event.preventDefault()
+        issueDelegationWithAgent(
+          new FormData(event.currentTarget).get('agent_id'),
+          new FormData(event.currentTarget).get('scopes'),
+          new FormData(event.currentTarget).get('expires'),
+        )
+      }}>
         <h2 className="font-semibold">Issue delegation</h2>
-        <input name="agent_id" required placeholder="Patroclus agent UUID" />
+        <ResourceSelect label="Agent" name="agent_id" options={agents} />
         <input name="scopes" required placeholder="relay:call,miser:route" />
-        <input name="expires" type="number" min="60" defaultValue="900" />
+        <label className="grid gap-2 text-sm"><span className="label">Expires in seconds</span><input name="expires" type="number" min="60" defaultValue="900" /></label>
         <button className="btn btn-primary" data-testid="delegation-submit">Issue</button>
       </form>
 
       <section className="panel p-5">
         <h2 className="font-semibold">Grants</h2>
-        <button className="btn btn-primary mt-3" onClick={revokeGrant}>Revoke by ID</button>
+        <button className="btn btn-primary mt-3" data-testid="open-grant-revocation" onClick={() => setGrantDialog({ values: {} })}>Revoke grant</button>
       </section>
+
+      {approvalDialog && (
+        <PromptDialog
+          open
+          title="Resolve approval"
+          description={`Approval ${approvalDialog.id} will be recorded with your principal ID.`}
+          fields={[{ name: 'reason', label: 'Approval reason', value: 'Approved from Governance Hub' }]}
+          submitLabel="Approve"
+          busy={busyAction === 'approval'}
+          onSubmit={(values) => resolveApproval(approvalDialog.id, values.reason || 'Approved from Governance Hub')}
+          onCancel={() => setApprovalDialog(null)}
+        />
+      )}
+
+      {tokenDialog && (
+        <PromptDialog
+          open
+          title="Revoke access token"
+          description="The token is rejected immediately. This action is audited."
+          fields={[
+  { name: 'token_id', label: 'Revoked token identifier' },
+            { name: 'reason', label: 'Required reason', textarea: true },
+          ]}
+          submitLabel="Revoke token"
+          busy={busyAction === 'token'}
+          onSubmit={(values) => revokeToken(values)}
+          onCancel={() => setTokenDialog(null)}
+        />
+      )}
+
+      {grantDialog && (
+        <PromptDialog
+          open
+          title="Revoke delegation grant"
+          fields={[{ name: 'grant_id', label: 'Grant identifier' }]}
+          submitLabel="Revoke"
+          busy={busyAction === 'grant'}
+          onSubmit={(values) => revokeGrant(values)}
+          onCancel={() => setGrantDialog(null)}
+        />
+      )}
+
+      {killSessionId && (
+        <ConfirmDialog
+          open
+          title="Kill live session"
+          message={`Session ${killSessionId} will terminate immediately.`}
+          confirmLabel="Kill session"
+          danger
+          busy={busyAction === `session-${killSessionId}`}
+          onConfirm={async () => { await killSession(killSessionId); setKillSessionId(null) }}
+          onCancel={() => setKillSessionId(null)}
+        />
+      )}
 
       <form className="panel p-5 space-y-3" data-testid="policy-simulator" onSubmit={runSimulation}>
         <h2 className="font-semibold">Policy simulator</h2>

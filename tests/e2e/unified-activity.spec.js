@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 
 test('Activity displays normalized cross-service events', async ({ page }) => {
   await page.goto('/')
-  await page.getByRole('button', { name: 'Activity' }).click()
+  await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Activity', exact: true }).click()
   await expect(page.getByTestId('activity-feed')).toBeVisible()
   await expect(page.getByText('policy.evaluate')).toBeVisible()
   await expect(page.getByText('key.active')).toBeVisible()

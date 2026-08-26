@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { svcGet, identities, fmtInt } from '../api.js'
+import { PromptDialog, ResourceSelect, useToast } from '../components.jsx'
 
 /**
  * Agents — the unified roster.
@@ -7,23 +8,32 @@ import { svcGet, identities, fmtInt } from '../api.js'
  * One place to see every actor in the ecosystem.
  */
 export default function AgentsView() {
-  const [hive, setHive] = useState({ data: null, err: '' })
+  const [hiveErr, setHiveErr] = useState('')
   const [dir, setDir] = useState({ data: null, err: '' })
   const [actionError, setActionError] = useState('')
   const [identityForm, setIdentityForm] = useState({ name: '', scopes: 'relay:call' })
   const [runtimeForm, setRuntimeForm] = useState({ name: '', endpoint_url: '' })
+  const toast = useToast()
+  const [identityAction, setIdentityAction] = useState(null)
+  const [patroclusAction, setPatroclusAction] = useState(null)
+  const [healthAction, setHealthAction] = useState(null)
+  const [runtimeAgents, setRuntimeAgents] = useState([])
 
   useEffect(() => {
-    svcGet('hive', '/api/agents?limit=100&order=recent')
-      .then((d) => setHive({ data: d, err: '' }))
-      .catch((e) => setHive({ data: null, err: String(e.message || e) }))
+    const loadRuntime = () => svcGet('hive', '/api/agents?limit=100&order=recent')
+      .then((d) => {
+        const rows = Array.isArray(d) ? d : d?.items ?? d?.agents ?? []
+        setRuntimeAgents(rows)
+      })
+      .catch((e) => { setHiveErr(String(e.message || e)); setRuntimeAgents([]) })
+    loadRuntime()
     identities()
       .then((d) => setDir({ data: d, err: '' }))
       .catch((e) => setDir({ data: null, err: String(e.message || e) }))
   }, [])
 
-  const runIdentityAction = async (identityId, action) => {
-    const reason = window.prompt(`${action} identity ${identityId}. Required reason:`)
+  const runIdentityAction = async (identityId, action, dialogValues) => {
+    const { reason } = dialogValues ?? identityAction?.values ?? {}
     if (!reason?.trim()) return
     setActionError('')
     try {
@@ -43,16 +53,15 @@ export default function AgentsView() {
           )),
         },
       }))
+      setIdentityAction(null)
     } catch (error) {
       setActionError(String(error.message || error))
     }
   }
 
-  const emergencyKill = async () => {
-    const patroclusId = window.prompt('Patroclus agent UUID:')
-    if (!patroclusId?.trim()) return
-    const reason = window.prompt('Required emergency reason:')
-    if (!reason?.trim()) return
+  const emergencyKill = async (dialogValues) => {
+    const { agent_id: patroclusId, reason } = dialogValues ?? patroclusAction?.values ?? {}
+    if (!patroclusId?.trim() || !reason?.trim()) return
     setActionError('')
     try {
       const response = await fetch(`/api/bff/agents/${encodeURIComponent(patroclusId)}/emergency-kill`, {
@@ -63,13 +72,14 @@ export default function AgentsView() {
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.error || `status ${response.status}`)
       setActionError(`Emergency stop applied to ${patroclusId} by ${body.operator}.`)
+      setPatroclusAction(null)
     } catch (error) {
       setActionError(String(error.message || error))
     }
   }
 
-  const restoreAgent = async () => {
-    const patroclusId = window.prompt('Patroclus agent UUID:')
+  const restoreAgent = async (dialogValues) => {
+    const { agent_id: patroclusId } = dialogValues ?? patroclusAction?.values ?? {}
     if (!patroclusId?.trim()) return
     setActionError('')
     try {
@@ -77,6 +87,7 @@ export default function AgentsView() {
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.error || `status ${response.status}`)
       setActionError(`Emergency stop cleared for ${patroclusId}. Status: ${body.status}.`)
+      setPatroclusAction(null)
     } catch (error) {
       setActionError(String(error.message || error))
     }
@@ -114,6 +125,13 @@ export default function AgentsView() {
       })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.error || `status ${response.status}`)
+      const agentId = body.agent_id ?? body.id
+      setRuntimeAgents((current) => [...current, {
+        id: agentId,
+        agent_id: agentId,
+        name: runtimeForm.name,
+        status: 'active',
+      }])
       setActionError(`Runtime agent ${body.agent_id ?? body.id ?? runtimeForm.name} registered.`)
       setRuntimeForm({ name: '', endpoint_url: '' })
     } catch (error) {
@@ -121,18 +139,15 @@ export default function AgentsView() {
     }
   }
 
-  const checkRuntimeHealth = async () => {
-    const agentId = window.prompt('Hive agent ID:')
+  const checkRuntimeHealth = async (agentId) => {
     if (!agentId?.trim()) return
     const response = await fetch(`/api/bff/runtime-agents/${encodeURIComponent(agentId)}/health`)
     const body = await response.json().catch(() => ({}))
-    setActionError(response.ok ? `Health checked ${agentId}: ${body.status ?? 'ok'}` : body.error || `status ${response.status}`)
+      setActionError(response.ok ? `Health checked ${agentId}: ${body.status ?? 'ok'}` : body.error || `status ${response.status}`)
+      setHealthAction(null)
   }
 
-  const runtimeRaw = Array.isArray(hive.data)
-    ? hive.data
-    : (hive.data?.items ?? hive.data?.agents ?? [])
-  const runtimeAgents = [...runtimeRaw].sort(
+  const sortedRuntimeAgents = [...runtimeAgents].sort(
     (a, b) => String(b.created_at ?? '').localeCompare(String(a.created_at ?? '')),
   )
   const agents = Array.isArray(dir.data?.agents) ? dir.data.agents : []
@@ -145,11 +160,49 @@ export default function AgentsView() {
           <p className="text-[13px] text-slate-500 mt-0.5">
             Runtime actors (Hive) and their ecosystem identities (Argus) — one roster.
           </p>
-          <button className="btn btn-ghost mt-2" onClick={emergencyKill}>Emergency stop</button>
-          <button className="btn btn-ghost mt-2 ml-2" data-testid="agent-restore-btn" onClick={restoreAgent}>Restore agent</button>
-          <button className="btn btn-ghost mt-2 ml-2" onClick={checkRuntimeHealth}>Check runtime health</button>
+          <button className="btn btn-danger" onClick={() => setPatroclusAction({ kind: 'kill', values: {} })}>Emergency stop</button>
+          <button className="btn" data-testid="agent-restore-btn" onClick={() => setPatroclusAction({ kind: 'restore', values: {} })}>Restore agent</button>
+          <button className="btn" onClick={() => setHealthAction({ values: {} })}>Check runtime agent health</button>
         </div>
       </div>
+
+      {identityAction && (
+        <PromptDialog
+          open
+          title={`${identityAction.action} identity`}
+          description={`Identity ${identityAction.id} requires a recorded reason.`}
+          fields={[{ name: 'reason', label: 'Required reason', textarea: true }]}
+          submitLabel={identityAction.action === 'revoke' ? 'Revoke identity' : 'Restore identity'}
+          onSubmit={(values) => runIdentityAction(identityAction.id, identityAction.action, values)}
+          onCancel={() => setIdentityAction(null)}
+        />
+      )}
+
+      {patroclusAction && (
+        <PromptDialog
+          open
+          title={patroclusAction.kind === 'kill' ? 'Emergency stop' : 'Clear emergency stop'}
+          description="The action applies across Patroclus and is attributed to your session."
+          fields={[
+            { name: 'agent_id', label: 'Runtime agent', type: 'select', options: sortedRuntimeAgents.map(({ id, agent_id, name }) => ({ id: id ?? agent_id, name: name ?? id ?? agent_id })) },
+            ...(patroclusAction.kind === 'kill' ? [{ name: 'reason', label: 'Required reason', textarea: true }] : []),
+          ]}
+          submitLabel={patroclusAction.kind === 'kill' ? 'Apply stop' : 'Clear stop'}
+          onSubmit={(values) => patroclusAction.kind === 'kill' ? emergencyKill(values) : restoreAgent(values)}
+          onCancel={() => setPatroclusAction(null)}
+        />
+      )}
+
+      {healthAction && (
+        <PromptDialog
+          open
+          title="Check runtime agent health"
+          fields={[{ name: 'agent_id', label: 'Runtime agent', type: 'select', options: sortedRuntimeAgents.map(({ id, agent_id, name }) => ({ id: id ?? agent_id, name: name ?? id ?? agent_id })) }]}
+          submitLabel="Check health"
+          onSubmit={(values) => checkRuntimeHealth(values.agent_id)}
+          onCancel={() => setHealthAction(null)}
+        />
+      )}
 
       <form className="panel p-5 space-y-3" data-testid="runtime-agent-form" onSubmit={createRuntimeAgent}>
         <h2 className="font-semibold">Register runtime agent</h2>
@@ -172,9 +225,9 @@ export default function AgentsView() {
             <span className="label">Runtime · Hive</span>
             <span className="num text-[11px] text-slate-600">{fmtInt(runtimeAgents.length)}</span>
           </div>
-          {hive.err && <div className="p-4 text-[13px] text-amber-400/90">Hive unreachable — {hive.err}</div>}
-          {!hive.err && !hive.data && <div className="p-4 text-sm text-slate-600">Loading…</div>}
-          {hive.data && (
+          {hiveErr && <div className="p-4 text-[13px] text-amber-400/90">Hive unavailable — {hiveErr}</div>}
+          {!hiveErr && !runtimeAgents.length && <div className="p-4 text-sm text-slate-600">No runtime agents yet.</div>}
+          {runtimeAgents.length > 0 && (
             <table className="data">
               <thead><tr><th>Agent</th><th>Status</th></tr></thead>
               <tbody>
@@ -217,9 +270,9 @@ export default function AgentsView() {
                       : <span className="badge badge-crit">revoked</span>}</td>
                     <td>
                       {a.status === 'active' ? (
-                        <button data-testid={`identity-revoke-${a.id}`} className="btn btn-ghost !py-1 !px-2 !text-[11px]" onClick={() => runIdentityAction(a.id, 'revoke')}>Revoke</button>
+                        <button data-testid={`identity-revoke-${a.id}`} className="btn btn-ghost !py-1 !px-2 !text-[11px]" onClick={() => setIdentityAction({ id: a.id, action: 'revoke', values: {} })}>Revoke</button>
                       ) : (
-                        <button data-testid={`identity-restore-${a.id}`} className="btn btn-ghost !py-1 !px-2 !text-[11px]" onClick={() => runIdentityAction(a.id, 'restore')}>Restore</button>
+                        <button data-testid={`identity-restore-${a.id}`} className="btn btn-ghost !py-1 !px-2 !text-[11px]" onClick={() => setIdentityAction({ id: a.id, action: 'restore', values: {} })}>Restore</button>
                       )}
                     </td>
                   </tr>

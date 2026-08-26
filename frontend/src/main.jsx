@@ -1,6 +1,7 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.jsx'
+import { ToastProvider } from './components.jsx'
 import './index.css'
 
 // Ensure all same-origin API requests carry the session cookie.
@@ -15,6 +16,8 @@ globalThis.fetch = function patchedFetch(input, init) {
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <App />
+    <ToastProvider>
+      <App />
+    </ToastProvider>
   </React.StrictMode>,
 )

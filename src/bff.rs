@@ -2431,3 +2431,42 @@ pub async fn mcp_oauth_connect(
         Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("hive: {error}")),
     }
 }
+
+/// GET /api/bff/directory/agents — real selectable identities for access flows.
+pub async fn agent_directory(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let hive_token = hive_service_token(&state).await;
+    let hive_result = backend_get(
+        &state,
+        format!("{}/api/agents?limit=100&order=recent", hive_url()),
+        hive_token.as_deref(),
+    )
+    .await;
+
+    let mut agents: Vec<Value> = Vec::new();
+    if let Ok(hive) = hive_result {
+        let rows = hive
+            .get("items")
+            .or_else(|| hive.get("agents"))
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        for row in rows {
+            let id = row
+                .get("id")
+                .or_else(|| row.get("agent_id"))
+                .cloned()
+                .unwrap_or_default();
+            agents.push(json!({
+                "id": id,
+                "name": row.get("name").cloned().unwrap_or_else(|| id.clone()),
+                "status": row.get("status").cloned().unwrap_or_else(|| json!("active")),
+                "source": "hive",
+            }));
+        }
+    }
+
+    Json(json!({ "agents": agents })).into_response()
+}

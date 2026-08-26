@@ -60,6 +60,7 @@ pub fn router(state: AppState) -> Router {
         .route("/logout", post(console::logout).get(console::logout_get))
         .route("/api/me", get(console::me))
         .route("/api/console/identities", get(console::identities))
+        .route("/api/bff/directory/agents", get(bff::agent_directory))
         .route("/api/console/services", get(console::services_list))
         .route(
             "/api/console/services",

@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 
 test('Activity uses canonical events, filters severity, and exports evidence', async ({ page }) => {
   await page.goto('/')
-  await page.getByRole('button', { name: 'Activity' }).click()
+  await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Activity', exact: true }).click()
 
   await expect(page.getByText('governance.event.v1')).toBeVisible()
   await expect(page.getByTestId('activity-feed')).toContainText('critical')
@@ -13,7 +13,7 @@ test('Activity uses canonical events, filters severity, and exports evidence', a
 
 test('Canonical activity filters reconstruct a session trace', async ({ page }) => {
   await page.goto('/')
-  await page.getByRole('button', { name: 'Activity' }).click()
+  await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Activity', exact: true }).click()
 
   await page.getByTestId('activity-filter-source').fill('patroclus')
   await expect(page.getByText('policy.evaluate')).toBeVisible()
