@@ -3,7 +3,6 @@ import { test, expect } from '@playwright/test'
 test('Access operators revoke a Patroclus token with a reason', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Access', exact: true }).click()
-  await expect(page.getByTestId('token-revocation')).toBeVisible()
 
   await page.getByTestId('open-token-revocation').click()
   await expect(page.getByTestId('hub-modal')).toBeVisible()

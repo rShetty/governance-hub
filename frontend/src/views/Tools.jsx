@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { svcGet, fmtInt } from '../api.js'
+import { PromptDialog, useToast } from '../components.jsx'
+import PolicyWizard from '../components/PolicyWizard.jsx'
 
 function useBff() {
   const [state, setState] = useState({ data: null, err: '' })
@@ -46,6 +48,7 @@ async function checkCatalogHealth(source, itemId, setMessage) {
 }
 
 export default function Tools() {
+  const [policyWizardFor, setPolicyWizardFor] = useState(null)
   const relay = useSvcRelay()
   const bff = useBff()
   const catalog = useUnifiedCatalog()
@@ -83,7 +86,7 @@ export default function Tools() {
   }
 
   const tools = Array.isArray(bff.data?.tools) ? bff.data.tools : []
-  const catalogItems = catalog.data?.items ?? []
+  const catalogItems = [...(catalog.data?.items ?? []), ...extra]
   const filteredCatalog = catalogItems.filter((item) => {
     if (!catalogSearch) return true
     const q = catalogSearch.toLowerCase()
@@ -113,7 +116,7 @@ export default function Tools() {
           <span className="label">Unified capability catalog</span>
           <span className="num text-xs text-slate-600">{catalog.data?.total ?? 0}</span>
         </div>
-        {catalog.data?.items?.length > 0 && (
+        {catalogItems.length > 0 && (
           <div className="px-4 py-3 border-b border-[#232833] flex items-center gap-3">
             <input
               data-testid="catalog-search"
@@ -127,7 +130,7 @@ export default function Tools() {
         )}
         {catalog.err && <div className="p-4 text-sm text-amber-300">{catalog.err}</div>}
         {!catalog.err && !catalog.data && <div className="p-4 text-sm text-slate-600">Loading…</div>}
-        {catalog.data && !catalog.data.items.length && (
+        {catalog.data && !catalogItems.length && (
           <div className="p-8 text-center text-sm text-slate-600" data-testid="catalog-empty">No capabilities registered.</div>
         )}
         {filteredCatalog.length > 0 && (
@@ -161,6 +164,11 @@ export default function Tools() {
                     <td>—</td>
                   )}
                   <td>
+                    {item.kind === 'mcp-server' && (
+                      <button type="button" className="btn btn-ghost !py-1 !px-2 !text-[11px]" onClick={() => setPolicyWizardFor(item)} data-testid={`create-policy-${item.id}`}>
+                        Policy
+                      </button>
+                    )}
                     <button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`toggle-${item.id}`} onClick={async () => {
                       const response = await fetch(`/api/bff/catalog/relay/${encodeURIComponent(String(item.id))}/toggle`, { method: 'POST' })
                       const body = await response.json().catch(() => ({}))
@@ -198,18 +206,15 @@ export default function Tools() {
       </section>
       {healthMessage && <div className={healthMessage.ok ? 'text-sm text-teal-300' : 'text-sm text-rose-400'} data-testid="catalog-health-result">{healthMessage.text}</div>}
 
-      <section className="panel overflow-hidden" data-testid="policy-mapping">
-        <div className="px-4 py-3 border-b border-[#232833] flex items-center justify-between">
-          <span className="label">Policy mapping status</span>
-          <span className="num text-xs text-slate-600">{catalog.data?.grant_mapping_status?.missing_mappings ?? 0} missing</span>
-        </div>
-        {catalog.data?.items?.filter((item) => item.mapping)?.map((item) => (
-          <div key={item.id} className="px-4 py-2 border-t border-[#232833]/60 flex items-center gap-2" data-testid={`mapping-${item.id}`}>
-            <span className="text-sm text-slate-200">{item.name}</span>
-            <span className={`badge ${item.mapping.state === 'mapped' ? 'badge-ok' : item.mapping.state === 'missing_policy' ? 'badge-crit' : 'badge-warn'}`}>{item.mapping.state}</span>
-          </div>
-        ))}
-      </section>
+      {policyWizardFor && (
+        <PolicyWizard
+          open
+          serverName={policyWizardFor.name}
+          serverId={String(policyWizardFor.id)}
+          onClose={() => setPolicyWizardFor(null)}
+          onCreated={() => setPolicyWizardFor(null)}
+        />
+      )}
 
       <form className="panel p-5 space-y-3" data-testid="tool-invocation-console" onSubmit={invokeTool}>
         <h2 className="font-semibold">Guarded tool invocation</h2>
@@ -285,7 +290,7 @@ export default function Tools() {
         {wizardOpen && (
           <InstallWizard
             onClose={() => setWizardOpen(false)}
-            onInstalled={(srv) => setExtra((x) => [...x.filter((s) => s.id !== srv.id), srv])}
+            onInstalled={(srv) => setExtra((x) => [...x.filter((s) => s.id !== srv.id), { kind: 'mcp-server', source: 'hive', status: srv.status ?? 'active', ...srv }])}
           />
         )}
         <McpList extra={extra} />
@@ -359,20 +364,25 @@ function McpForm({ onCreated }) {
   )
 }
 
-function McpList({ extra = [] }) {
+function McpList({ extra = [], onRefresh }) {
   const [list, setList] = useState(null)
   const [accessFor, setAccessFor] = useState(null) // server_id being inspected
   const [access, setAccess] = useState([])
   const [busy, setBusy] = useState('')
   const [page, setPage] = useState(0)
   const [search, setSearch] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
+  const [agentDialog, setAgentDialog] = useState(null)
+  const toast = useToast()
 
   useEffect(() => {
     fetch('/api/bff/mcp')
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((d) => setList(Array.isArray(d) ? d : d.servers ?? d.items ?? []))
       .catch(() => setList([]))
-  }, [extra.length])
+  }, [extra.length, reloadKey])
+
+  const refreshMcp = () => setReloadKey((key) => key + 1)
 
   const all = [...extra, ...(Array.isArray(list) ? list : [])]
   const filtered = all.filter((m) => {
@@ -389,9 +399,7 @@ function McpList({ extra = [] }) {
   const safePage = Math.min(page, totalPages - 1)
   const paged = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE)
 
-  const grantToAgent = async (serverId) => {
-    const agentId = prompt('Agent ID to grant access:')
-    if (!agentId) return
+  const grantAccess = async (serverId, agentId) => {
     setBusy(serverId + ':grant')
     try {
       const r = await fetch(`/api/bff/mcp/${serverId}/grant`, {
@@ -401,17 +409,17 @@ function McpList({ extra = [] }) {
       })
       const body = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(body.error || `status ${r.status}`)
-      setBusy('')
-      alert('Access granted.')
+      toast.success('Access granted.')
+      return true
     } catch (e) {
+      toast.error('Grant failed: ' + String(e.message || e))
+      return false
+    } finally {
       setBusy('')
-      alert('Grant failed: ' + String(e.message || e))
     }
   }
 
-  const revokeFromAgent = async (serverId) => {
-    const agentId = prompt('Agent ID to revoke access from:')
-    if (!agentId) return
+  const revokeAccess = async (serverId, agentId) => {
     setBusy(serverId + ':revoke')
     try {
       const r = await fetch(`/api/bff/mcp/${serverId}/revoke`, {
@@ -421,12 +429,23 @@ function McpList({ extra = [] }) {
       })
       const body = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(body.error || `status ${r.status}`)
-      setBusy('')
-      alert('Access revoked.')
+      toast.success('Access revoked.')
+      return true
     } catch (e) {
+      toast.error('Revoke failed: ' + String(e.message || e))
+      return false
+    } finally {
       setBusy('')
-      alert('Revoke failed: ' + String(e.message || e))
     }
+  }
+
+  const submitAgentAccess = async (values) => {
+    if (!values.agent_id?.trim() || !agentDialog) return
+    const { kind, serverId } = agentDialog
+    const done = kind === 'grant'
+      ? await grantAccess(serverId, values.agent_id.trim())
+      : await revokeAccess(serverId, values.agent_id.trim())
+    if (done) setAgentDialog(null)
   }
 
   const showAccess = async (serverId) => {
@@ -479,11 +498,13 @@ function McpList({ extra = [] }) {
                 <div className="flex gap-1.5">
                   <button className="btn btn-ghost !py-1 !px-2 !text-[11px]"
                     disabled={busy === m.id + ':grant'}
-                    onClick={() => grantToAgent(m.id)}
+                    onClick={() => setAgentDialog({ kind: 'grant', serverId: m.id, name: m.name })}
+                    data-testid={`mcp-grant-${m.id}`}
                     title="Give an agent access to this server">Grant → agent</button>
                   <button className="btn btn-ghost !py-1 !px-2 !text-[11px]"
                     disabled={busy === m.id + ':revoke'}
-                    onClick={() => revokeFromAgent(m.id)}
+                    onClick={() => setAgentDialog({ kind: 'revoke', serverId: m.id, name: m.name })}
+                    data-testid={`mcp-revoke-${m.id}`}
                     title="Remove agent access">Revoke</button>
                   <button className="btn btn-ghost !py-1 !px-2 !text-[11px]"
                     disabled={busy === m.id + ':access'}
@@ -502,6 +523,19 @@ function McpList({ extra = [] }) {
             {JSON.stringify(access, null, 1).slice(0, 800)}
           </pre>
         </div>
+      )}
+
+      {agentDialog && (
+        <PromptDialog
+          open
+          title={`${agentDialog.kind === 'grant' ? 'Grant' : 'Revoke'} access · ${agentDialog.name}`}
+          description="The action is recorded in the audit log with your operator identity."
+          fields={[{ name: 'agent_id', label: 'Agent ID' }]}
+          submitLabel={agentDialog.kind === 'grant' ? 'Grant access' : 'Revoke access'}
+          busy={busy === agentDialog.serverId + ':grant' || busy === agentDialog.serverId + ':revoke'}
+          onSubmit={submitAgentAccess}
+          onCancel={() => setAgentDialog(null)}
+        />
       )}
       {busy && <div className="p-2 text-[11px] text-slate-500 num">working: {busy}…</div>}
 

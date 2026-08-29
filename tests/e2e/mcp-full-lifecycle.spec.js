@@ -2,20 +2,22 @@ import { test, expect } from '@playwright/test'
 
 // This suite only runs against the local fixture server.
 const BASE = process.env.E2E_BASE_URL || 'https://governance.rajeev.me'
-test.skip(!process.env.E2E_LOCAL, 'MCP lifecycle mutations require local E2E environment')
 
 const runId = Date.now().toString(36)
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/__test__/admin')
-  await page.goto(BASE)
+  await page.goto('/')
+  await page.goto('/__test__/admin')
+  await page.goto('/')
   await expect(page.getByText('administrator')).toBeVisible()
 })
 
 test('MCP full lifecycle: install wizard → grant → policy → verify access → revoke', async ({ page }) => {
   // ── STEP 1: Install MCP server via wizard ──
   const serverName = `lifecycle-mcp-${runId}`
-  await page.getByRole('button', { name: 'Tools & MCP' }).click()
+  await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Tools & MCP', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Install MCP server' })).toBeVisible()
   await page.getByTestId('install-mcp-btn').click()
   await expect(page.getByTestId('install-wizard')).toBeVisible()
   await page.getByTestId('wiz-name').fill(serverName)
@@ -24,6 +26,9 @@ test('MCP full lifecycle: install wizard → grant → policy → verify access 
   await page.getByTestId('wiz-install-btn').click()
   await expect(page.getByTestId('wiz-installed-ok')).toBeVisible({ timeout: 10000 })
   await page.getByTestId('wiz-next-2').click()
+  await page.getByTestId('wiz-agents').fill('')
+  await page.getByRole('button', { name: 'Skip' }).click()
+  await page.getByTestId('wiz-finish').click()
 
   // ── STEP 2: Create a runtime agent ──
   const agentName = `lifecycle-agent-${runId}`
@@ -61,11 +66,11 @@ test('MCP full lifecycle: install wizard → grant → policy → verify access 
   })
   expect(policyResponse.status()).toBe(201)
 
-  await page.getByRole('button', { name: 'Access', exact: true }).click()
-  await expect(page.getByText(policyName)).toBeVisible({ timeout: 10000 })
-
   // ── STEP 5: Simulate a tool call against this server's resource ──
-  await page.getByTestId('open-policy-wizard').click()
+  await page.getByRole('button', { name: 'Tools & MCP', exact: true }).click()
+  await page.getByTestId('catalog-search').fill(serverName)
+  await expect(page.getByText(serverName).first()).toBeVisible({ timeout: 10000 })
+  await page.locator('[data-testid^="create-policy-"]').first().click()
   await expect(page.getByTestId('hub-wizard')).toBeVisible()
   await page.getByTestId('policy-name').fill(serverName)
   await page.getByTestId('wizard-next').click()
@@ -77,12 +82,16 @@ test('MCP full lifecycle: install wizard → grant → policy → verify access 
   await page.getByTestId('simulate-run').click()
   await expect(page.getByTestId('simulation-result')).toContainText('ALLOW')
 
+  // Save and close the policy wizard before continuing catalog actions.
+  await page.getByTestId('wizard-finish').click()
+  await expect(page.getByTestId('hub-wizard')).not.toBeVisible()
+
   // ── STEP 6: Verify catalog shows server with authorized agents ──
   await page.getByRole('button', { name: 'Tools & MCP' }).click()
   await page.getByTestId('mcp-search').fill(serverName)
   await expect(page.getByText(serverName).first()).toBeVisible({ timeout: 10000 })
 
-  const row = page.locator('tr', { hasText: serverName }).first()
+  const row = page.getByTestId('mcp-table').locator('tr', { hasText: serverName }).last()
   await row.getByRole('button', { name: /Who has it/ }).click()
   await expect(page.getByTestId('access-list')).toContainText(agentId, { timeout: 10000 })
 

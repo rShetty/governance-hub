@@ -10,4 +10,8 @@ test('Activity reconstructs a cross-service trace by session ID', async ({ page 
   await expect(page.getByTestId('trace-detail')).toContainText('Trace · session-e2e')
   await expect(page.getByTestId('trace-detail')).toContainText('policy.evaluate')
   await expect(page.getByTestId('trace-detail')).toContainText('egress.allowed')
+  await expect(page.getByTestId('trace-detail')).toContainText('tool.invoke')
+  await expect(page.getByTestId('trace-detail')).toContainText('relay')
+  await expect(page.getByTestId('trace-detail')).toContainText('argus')
+  await expect(page.getByTestId('trace-detail')).toContainText('forge')
 })

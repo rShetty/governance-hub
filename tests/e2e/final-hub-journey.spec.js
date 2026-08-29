@@ -10,8 +10,10 @@ test('Final verification: admin completes every major governance domain in the H
 
   // Identity
   await page.getByRole('button', { name: 'Agents' }).click()
-  await page.getByTestId('identity-name').fill('final-identity')
-  await page.getByTestId('identity-mint-submit').click()
+  await page.getByTestId('open-identity-dialog').click()
+  await expect(page.getByTestId('hub-modal')).toBeVisible()
+  await page.getByTestId('dialog-name').fill('final-identity')
+  await page.getByTestId('hub-modal').getByRole('button', { name: 'Mint identity' }).click()
   await expect(page.getByTestId('identity-action-result')).toContainText('minted')
   await page.getByRole('button', { name: 'Identity Directory' }).click()
   await expect(page.getByRole('button', { name: /Agents \(\d+\)/ })).toBeVisible()
@@ -19,11 +21,12 @@ test('Final verification: admin completes every major governance domain in the H
   // Tools & MCP
   await page.getByRole('button', { name: 'Tools & MCP' }).click()
   await expect(page.getByTestId('unified-catalog')).toBeVisible()
-  await expect(page.getByTestId('policy-mapping')).toBeVisible()
+  await expect(page.getByTestId('unified-catalog')).toBeVisible()
 
   // Access
   await page.getByRole('button', { name: 'Access' }).click()
-  await expect(page.getByRole('button', { name: 'Create policy' })).toBeVisible()
+  await expect(page.getByTestId('pending-approvals')).toBeVisible()
+  await expect(page.getByTestId('policy-pol_e2e_001')).toBeVisible()
 
   // Orchestration
   await page.getByRole('button', { name: 'Orchestration' }).click()

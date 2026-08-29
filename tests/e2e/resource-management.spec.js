@@ -6,8 +6,10 @@ test('Access operators list and create protected resources', async ({ page }) =>
 
   await expect(page.getByTestId('resource-list')).toContainText('Fixture API')
 
-  await page.getByPlaceholder('resource name').fill('Playwright Resource')
-  await page.getByPlaceholder('api/service/*').fill('api/playwright/*')
-  await page.getByRole('button', { name: 'Create', exact: true }).click()
-  await expect(page.getByText('Resource Playwright Resource created.')).toBeVisible()
+  await page.getByTestId('open-resource-dialog').click()
+  await expect(page.getByTestId('hub-modal')).toBeVisible()
+  await page.getByTestId('dialog-name').fill('Playwright Resource')
+  await page.getByTestId('dialog-uri').fill('api/playwright/*')
+  await page.getByTestId('hub-modal').getByRole('button', { name: 'Create resource' }).click()
+  await expect(page.getByTestId('toast-success')).toContainText('Resource Playwright Resource created.')
 })

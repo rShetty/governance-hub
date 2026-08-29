@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { svcGet, identities, fmtInt } from '../api.js'
-import { PromptDialog, ResourceSelect, useToast } from '../components.jsx'
+import { PromptDialog, ResourceSelect, useToast, WizardModal } from '../components.jsx'
 
 /**
  * Agents — the unified roster.
@@ -17,7 +17,15 @@ export default function AgentsView() {
   const [identityAction, setIdentityAction] = useState(null)
   const [patroclusAction, setPatroclusAction] = useState(null)
   const [healthAction, setHealthAction] = useState(null)
+  const [creatorWizard, setCreatorWizard] = useState(null)
+  const [creatorStep, setCreatorStep] = useState(0)
   const [runtimeAgents, setRuntimeAgents] = useState([])
+  const [actors, setActors] = useState([])
+
+  const loadActors = () => fetch('/api/bff/actors')
+    .then((response) => (response.ok ? response.json() : Promise.reject(new Error(`status ${response.status}`))))
+    .then((data) => setActors(Array.isArray(data.actors) ? data.actors : []))
+    .catch(() => setActors([]))
 
   useEffect(() => {
     const loadRuntime = () => svcGet('hive', '/api/agents?limit=100&order=recent')
@@ -27,6 +35,7 @@ export default function AgentsView() {
       })
       .catch((e) => { setHiveErr(String(e.message || e)); setRuntimeAgents([]) })
     loadRuntime()
+    loadActors()
     identities()
       .then((d) => setDir({ data: d, err: '' }))
       .catch((e) => setDir({ data: null, err: String(e.message || e) }))
@@ -60,9 +69,12 @@ export default function AgentsView() {
   }
 
   const emergencyKill = async (dialogValues) => {
-    const { agent_id: patroclusId, reason } = dialogValues ?? patroclusAction?.values ?? {}
-    if (!patroclusId?.trim() || !reason?.trim()) return
+    const { agent_id: hiveId, reason } = dialogValues ?? patroclusAction?.values ?? {}
+    if (!hiveId?.trim() || !reason?.trim()) return
     setActionError('')
+    // Selectors use Hive IDs; the emergency action itself targets the
+    // correlated Patroclus agent record.
+    const patroclusId = actors.find((actor) => actor.hive_id === hiveId)?.patroclus_id || hiveId
     try {
       const response = await fetch(`/api/bff/agents/${encodeURIComponent(patroclusId)}/emergency-kill`, {
         method: 'POST',
@@ -71,7 +83,7 @@ export default function AgentsView() {
       })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.error || `status ${response.status}`)
-      setActionError(`Emergency stop applied to ${patroclusId} by ${body.operator}.`)
+      setActionError(`Emergency stop applied to ${patroclusId} (Hive: ${hiveId}) by ${body.operator}.`)
       setPatroclusAction(null)
     } catch (error) {
       setActionError(String(error.message || error))
@@ -79,9 +91,10 @@ export default function AgentsView() {
   }
 
   const restoreAgent = async (dialogValues) => {
-    const { agent_id: patroclusId } = dialogValues ?? patroclusAction?.values ?? {}
-    if (!patroclusId?.trim()) return
+    const { agent_id: hiveId } = dialogValues ?? patroclusAction?.values ?? {}
+    if (!hiveId?.trim()) return
     setActionError('')
+    const patroclusId = actors.find((actor) => actor.hive_id === hiveId)?.patroclus_id || hiveId
     try {
       const response = await fetch(`/api/bff/agents/${encodeURIComponent(patroclusId)}/restore`, { method: 'POST' })
       const body = await response.json().catch(() => ({}))
@@ -93,29 +106,30 @@ export default function AgentsView() {
     }
   }
 
-  const mintIdentity = async (event) => {
-    event.preventDefault()
+  const mintIdentity = async (values) => {
+    if (!values?.name?.trim()) return
     setActionError('')
     try {
       const response = await fetch('/api/bff/identities/mint', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          name: identityForm.name,
-          scopes: identityForm.scopes.split(',').map((scope) => scope.trim()).filter(Boolean),
+          name: values.name.trim(),
+          scopes: values.scopes.split(',').map((scope) => scope.trim()).filter(Boolean),
         }),
       })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.error || `status ${response.status}`)
       setActionError(`Identity ${body.agent_id} minted. Retrieve the one-time secret from the secure operator channel.`)
-      setIdentityForm({ name: '', scopes: 'relay:call' })
+      setCreatorWizard(null)
+      loadActors()
     } catch (error) {
       setActionError(String(error.message || error))
     }
   }
 
-  const createRuntimeAgent = async (event) => {
-    event.preventDefault()
+  const createRuntimeAgent = async () => {
+    if (!runtimeForm.name.trim() || !runtimeForm.endpoint_url.trim()) return
     setActionError('')
     try {
       const response = await fetch('/api/bff/runtime-agents', {
@@ -134,6 +148,8 @@ export default function AgentsView() {
       }])
       setActionError(`Runtime agent ${body.agent_id ?? body.id ?? runtimeForm.name} registered.`)
       setRuntimeForm({ name: '', endpoint_url: '' })
+      setCreatorWizard(null)
+      loadActors()
     } catch (error) {
       setActionError(String(error.message || error))
     }
@@ -204,19 +220,50 @@ export default function AgentsView() {
         />
       )}
 
-      <form className="panel p-5 space-y-3" data-testid="runtime-agent-form" onSubmit={createRuntimeAgent}>
-        <h2 className="font-semibold">Register runtime agent</h2>
-        <input data-testid="runtime-name" required placeholder="agent name" value={runtimeForm.name} onChange={(event) => setRuntimeForm({ ...runtimeForm, name: event.target.value })} />
-        <input data-testid="runtime-endpoint" required type="url" placeholder="https://agent.example.test" value={runtimeForm.endpoint_url} onChange={(event) => setRuntimeForm({ ...runtimeForm, endpoint_url: event.target.value })} />
-        <button className="btn btn-primary" data-testid="runtime-submit">Register</button>
-      </form>
+      {creatorWizard === 'runtime' && (
+        <WizardModal
+          open
+          title="Register runtime agent"
+          description="Connect a Hive runtime to the governance control plane."
+          steps={['Identity', 'Endpoint']}
+          activeStep={creatorStep}
+          onNext={() => setCreatorStep((step) => Math.min(step + 1, 2))}
+          onBack={() => setCreatorStep((step) => Math.max(0, step - 1))}
+          onFinish={createRuntimeAgent}
+          canContinue={creatorStep === 0 ? !!runtimeForm.name : true}
+          finishLabel="Register agent"
+          onCancel={() => setCreatorWizard(null)}
+        >
+          <label className="grid gap-2"><span className="label">Agent name</span><input data-testid="runtime-name" required value={runtimeForm.name} onChange={(event) => setRuntimeForm({ ...runtimeForm, name: event.target.value })} /></label>
+            {creatorStep >= 1 && <label className="grid gap-2"><span className="label">Endpoint URL</span><input data-testid="runtime-endpoint" type="url" required value={runtimeForm.endpoint_url} onChange={(event) => setRuntimeForm({ ...runtimeForm, endpoint_url: event.target.value })} /></label>}
+            {creatorStep === 1 && <p className="text-sm text-[#c9d1de]">The agent is registered in Hive and appears immediately in the runtime roster.</p>}
+        </WizardModal>
+      )}
 
-      <form className="panel p-5 space-y-3" data-testid="identity-mint-form" onSubmit={mintIdentity}>
-        <h2 className="font-semibold">Mint machine identity</h2>
-        <input data-testid="identity-name" required placeholder="agent name" value={identityForm.name} onChange={(event) => setIdentityForm({ ...identityForm, name: event.target.value })} />
-        <input data-testid="identity-scopes" placeholder="relay:call, miser:route" value={identityForm.scopes} onChange={(event) => setIdentityForm({ ...identityForm, scopes: event.target.value })} />
-        <button className="btn btn-primary" data-testid="identity-mint-submit">Mint</button>
-      </form>
+      {creatorWizard === 'identity' && (
+        <PromptDialog
+          open
+          title="Mint machine identity"
+          description="Creates a scoped Argus identity. The one-time secret stays backend-only."
+          fields={[
+            { name: 'name', label: 'Identity name', value: identityForm.name },
+            { name: 'scopes', label: 'Scopes', value: identityForm.scopes },
+          ]}
+          submitLabel="Mint identity"
+          onSubmit={(values) => {
+            mintIdentity(values)
+          }}
+          onCancel={() => setCreatorWizard(null)}
+        />
+      )}
+
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold">Create</h2>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn" onClick={() => { setCreatorWizard('runtime'); setCreatorStep(0) }} data-testid="open-runtime-wizard">Runtime agent</button>
+          <button className="btn btn-primary" onClick={() => setCreatorWizard('identity')} data-testid="open-identity-dialog">Machine identity</button>
+        </div>
+      </div>
 
       <div className="grid xl:grid-cols-2 gap-6">
         {/* Runtime agents — Hive */}
@@ -288,6 +335,30 @@ export default function AgentsView() {
           )}
         </section>
       </div>
+
+      <section className="panel overflow-hidden" data-testid="unified-actors">
+        <div className="px-4 py-3 border-b border-[#232833] flex items-center justify-between">
+          <span className="label">Unified actors · Hive + Argus + Patroclus</span>
+          <span className="num text-[11px] text-slate-600">{fmtInt(actors.length)}</span>
+        </div>
+        <table className="data">
+          <thead><tr><th>Actor</th><th>Hive ID</th><th>Argus ID</th><th>Patroclus ID</th></tr></thead>
+          <tbody>
+            {actors.map((actor) => (
+              <tr key={actor.hive_id ?? actor.argus_id ?? actor.name} data-testid={`actor-row-${actor.name}`}>
+                <td className="text-slate-200">{actor.name}</td>
+                <td className="font-mono text-[11px] text-slate-400">{actor.hive_id ?? '—'}</td>
+                <td className="font-mono text-[11px] text-slate-400">{actor.argus_id ?? '—'}</td>
+                <td className="font-mono text-[11px] text-slate-400">{actor.patroclus_id ?? '—'}</td>
+              </tr>
+            ))}
+            {!actors.length && (
+              <tr><td colSpan="4" className="text-center py-8 text-slate-600">No correlated actors yet.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </section>
+
       {actionError && <div className="panel p-4 text-sm text-slate-200" data-testid="identity-action-result">{actionError}</div>}
     </div>
   )

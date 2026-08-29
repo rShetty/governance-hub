@@ -296,7 +296,7 @@ export function WizardModal({
       <form
         onSubmit={(event) => {
           event.preventDefault()
-          isLast ? onFinish?.() : onNext?.()
+          if (!isLast) onNext?.()
         }}
         className="grid gap-5"
       >
@@ -307,7 +307,13 @@ export function WizardModal({
           <button type="button" className="btn" onClick={onBack} disabled={activeStep === 0 || busy}>
             ← Back
           </button>
-          <button type="submit" className={`btn ${isLast ? 'btn-primary' : ''}`} disabled={!canContinue || busy} data-testid={isLast ? 'wizard-finish' : 'wizard-next'}>
+          <button
+            type={isLast ? 'button' : 'submit'}
+            className={`btn ${isLast ? 'btn-primary' : ''}`}
+            disabled={!canContinue || busy}
+            onClick={isLast ? onFinish : undefined}
+            data-testid={isLast ? 'wizard-finish' : 'wizard-next'}
+          >
             {busy ? 'Working…' : isLast ? finishLabel : 'Continue'}
           </button>
         </div>

@@ -1,2 +1,4 @@
 /target
 frontend/node_modules
+test-results/
+playwright-report/

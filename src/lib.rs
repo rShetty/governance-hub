@@ -10,7 +10,7 @@ pub mod status;
 use axum::{
     http::header,
     response::{Html, Response},
-    routing::{get, patch, post},
+    routing::{delete, get, patch, post},
     Json, Router,
 };
 pub use config::Config;
@@ -61,6 +61,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/me", get(console::me))
         .route("/api/console/identities", get(console::identities))
         .route("/api/bff/directory/agents", get(bff::agent_directory))
+        .route("/api/bff/actors", get(bff::actors_list))
         .route("/api/console/services", get(console::services_list))
         .route(
             "/api/console/services",
@@ -117,6 +118,12 @@ pub fn router(state: AppState) -> Router {
             "/api/bff/policies",
             get(bff::policy_list).post(bff::policy_create),
         )
+        .route("/api/bff/policies/{policy_id}", delete(bff::policy_delete))
+        .route(
+            "/api/bff/access/resources/{resource_id}",
+            get(bff::resource_detail),
+        )
+        .route("/api/bff/access/check-access", post(bff::access_check))
         .route("/api/bff/activity", get(bff::activity_feed))
         .route("/api/bff/trace/{session_id}", get(bff::trace_detail))
         .route("/api/bff/access/delegations", post(bff::delegation_issue))

@@ -53,8 +53,10 @@ test('Install: grant button gives an agent access to a catalog server', async ({
   const grantResponse = page.waitForResponse((response) =>
     response.url().includes(`/api/bff/mcp/${serverId}/grant`) && response.request().method() === 'POST'
   )
-  page.once('dialog', (dialog) => { dialog.accept(agentId).catch(() => {}) })
   await row.getByRole('button', { name: /Grant → agent/ }).click()
+  await expect(page.getByTestId('hub-modal')).toBeVisible()
+  await page.getByTestId('dialog-agent_id').fill(agentId)
+  await page.getByTestId('hub-modal').getByRole('button', { name: 'Grant access' }).click()
   expect((await grantResponse).status()).toBe(200)
 
   // Verify the grant landed via the access list API

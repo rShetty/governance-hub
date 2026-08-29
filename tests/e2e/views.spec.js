@@ -40,7 +40,7 @@ test('Access: Patroclus policies listed with engine badges', async ({ page }) =>
   await page.getByRole('button', { name: 'Access' }).click()
   await expect(page.getByRole('heading', { name: 'Access', exact: true })).toBeVisible()
   await expect(page.getByText(/Active policies/i)).toBeVisible({ timeout: 15000 })
-  await expect(page.getByText('allow-github')).toBeVisible({ timeout: 15000 })
+  await expect(page.getByText('allow-github').first()).toBeVisible({ timeout: 15000 })
 })
 
 test('Cost & Routing: Miser keys table renders or clean empty state', async ({ page }) => {

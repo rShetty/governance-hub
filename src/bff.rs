@@ -139,6 +139,9 @@ fn sentiel_url() -> String {
 fn aegis_url() -> String {
     std::env::var("AEGIS_INTERNAL_URL").unwrap_or_else(|_| "http://127.0.0.1:8686".into())
 }
+fn forge_url() -> String {
+    std::env::var("FORGE_INTERNAL_URL").unwrap_or_else(|_| "http://127.0.0.1:8788".into())
+}
 
 // ── Unified fleet overview ───────────────────────────────────────────────────
 
@@ -873,6 +876,8 @@ pub struct PolicyCreateRequest {
     #[serde(default = "default_engine")]
     pub engine: String,
     pub definition: String,
+    #[serde(default)]
+    pub domain: String,
 }
 fn default_engine() -> String {
     "yaml".into()
@@ -886,12 +891,33 @@ pub async fn policy_create(
     if let Err(r) = require_admin(&state, &headers).await {
         return r;
     }
+    if !matches!(body.domain.as_str(), "" | "access" | "mcp" | "security") {
+        return now_err(
+            StatusCode::BAD_REQUEST,
+            "unsupported access/security policy domain",
+        );
+    }
     let tok = svc_env(&state, "PATROCLUS_ADMIN_TOKEN");
+    let domain = if body.domain.is_empty() {
+        "access".to_string()
+    } else {
+        body.domain.clone()
+    };
+    let mut payload = serde_json::to_value(&body).unwrap_or(Value::Null);
+    if let Some(object) = payload.as_object_mut() {
+        object.insert("domain".into(), json!(&domain));
+        if body.engine == "yaml" {
+            object.insert(
+                "definition".into(),
+                json!(format!("{}\n  domain: {}", body.definition, domain)),
+            );
+        }
+    }
     match backend_post(
         &state,
         format!("{}/v1/admin/policies", patroclus_url()),
         tok.as_deref(),
-        serde_json::to_value(&body).unwrap_or(Value::Null),
+        payload,
     )
     .await
     {
@@ -1049,8 +1075,21 @@ pub async fn activity_feed(
         format!("{}/api/agents?limit=20&order=recent", hive_url()),
         hive_token.as_deref(),
     );
+    let r_tok = svc_env(&state, "RELAY_ADMIN_TOKEN");
+    let rl = backend_get(
+        &state,
+        format!("{}/api/audit?limit={}", relay_url(), q.limit),
+        r_tok.as_deref(),
+    );
+    let f_tok = svc_env(&state, "FORGE_ADMIN_TOKEN");
+    let fg = backend_get(
+        &state,
+        format!("{}/api/audit?limit={}", forge_url(), q.limit),
+        f_tok.as_deref(),
+    );
+    let au = crate::console::argus_audit_list(&state);
 
-    let (pa, mi, hi) = tokio::join!(pa, mi, hi);
+    let (pa, mi, hi, rl, fg, au) = tokio::join!(pa, mi, hi, rl, fg, au);
 
     let mut items: Vec<Value> = Vec::new();
     if let Ok(Value::Array(list)) = ev {
@@ -1131,6 +1170,70 @@ pub async fn activity_feed(
                 ));
             }
         }
+    }
+    // Relay tool invocations and backend changes.
+    if let Ok(Value::Array(list)) = rl {
+        for entry in list {
+            items.push(canonical_event(
+                "relay",
+                entry.get("action").cloned().unwrap_or(json!("tool.invoke")),
+                entry
+                    .get("tool")
+                    .cloned()
+                    .or_else(|| entry.get("path").cloned())
+                    .unwrap_or(json!(null)),
+                entry
+                    .get("ts")
+                    .cloned()
+                    .or_else(|| entry.get("created_at").cloned())
+                    .unwrap_or(json!(null)),
+                entry,
+            ));
+        }
+    }
+    // Forge package lifecycle events.
+    if let Ok(Value::Array(list)) = fg {
+        for entry in list {
+            items.push(canonical_event(
+                "forge",
+                entry
+                    .get("action")
+                    .cloned()
+                    .unwrap_or(json!("package.event")),
+                entry
+                    .get("package")
+                    .cloned()
+                    .or_else(|| entry.get("name").cloned())
+                    .unwrap_or(json!(null)),
+                entry
+                    .get("created_at")
+                    .cloned()
+                    .or_else(|| entry.get("ts").cloned())
+                    .unwrap_or(json!(null)),
+                entry,
+            ));
+        }
+    }
+    // Argus identity and consent lifecycle events.
+    for entry in &au {
+        items.push(canonical_event(
+            "argus",
+            entry
+                .get("action")
+                .cloned()
+                .unwrap_or(json!("identity.event")),
+            entry
+                .get("username")
+                .cloned()
+                .or_else(|| entry.get("client_id").cloned())
+                .unwrap_or(json!(null)),
+            entry
+                .get("timestamp")
+                .cloned()
+                .or_else(|| entry.get("created_at").cloned())
+                .unwrap_or(json!(null)),
+            entry.clone(),
+        ));
     }
     items.sort_by(|a, b| {
         let ka = a["ts"].as_str().unwrap_or("").to_string();
@@ -1371,6 +1474,105 @@ pub async fn resources_list(State(state): State<AppState>, headers: HeaderMap) -
     .await
     {
         Ok(value) => Json(value).into_response(),
+        Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("patroclus: {error}")),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct AccessCheckRequest {
+    pub agent_id: String,
+    pub action: String,
+    pub resource: String,
+}
+
+/// DELETE /api/bff/policies/{policy_id} — remove a policy via Patroclus.
+pub async fn policy_delete(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(policy_id): Path<String>,
+) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let mut request = state
+        .client
+        .delete(format!(
+            "{}/v1/admin/policies/{}",
+            patroclus_url(),
+            policy_id
+        ))
+        .timeout(std::time::Duration::from_secs(10));
+    if let Some(token) = svc_env(&state, "PATROCLUS_ADMIN_TOKEN") {
+        request = request.bearer_auth(token);
+    }
+    match request.send().await {
+        Ok(response) => {
+            let status =
+                StatusCode::from_u16(response.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+            (status, Json(response.json().await.unwrap_or(Value::Null))).into_response()
+        }
+        Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("patroclus: {error}")),
+    }
+}
+
+/// GET /api/bff/access/resources/{resource_id} — single protected resource
+/// detail from Patroclus.
+pub async fn resource_detail(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(resource_id): Path<String>,
+) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let token = svc_env(&state, "PATROCLUS_ADMIN_TOKEN");
+    match backend_get(
+        &state,
+        format!("{}/v1/admin/resources/{}", patroclus_url(), resource_id),
+        token.as_deref(),
+    )
+    .await
+    {
+        Ok(value) => Json(value).into_response(),
+        Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("patroclus: {error}")),
+    }
+}
+
+/// POST /api/bff/access/check-access — authenticated Patroclus check-access.
+/// Unlike the advisory YAML simulator, this consults the live Patroclus
+/// policy engine on behalf of a real principal.
+pub async fn access_check(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<AccessCheckRequest>,
+) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    if body.agent_id.trim().is_empty()
+        || body.action.trim().is_empty()
+        || body.resource.trim().is_empty()
+    {
+        return now_err(
+            StatusCode::BAD_REQUEST,
+            "agent_id, action, and resource are required",
+        );
+    }
+    let token = svc_env(&state, "PATROCLUS_ADMIN_TOKEN");
+    let payload = json!({
+        "principal": body.agent_id,
+        "action": body.action,
+        "resource": body.resource,
+    });
+    match backend_post(
+        &state,
+        format!("{}/v1/admin/check-access", patroclus_url()),
+        token.as_deref(),
+        payload,
+    )
+    .await
+    {
+        Ok(result) => Json(json!({ "authority": "patroclus", "result": result })).into_response(),
         Err(error) => now_err(StatusCode::BAD_GATEWAY, &format!("patroclus: {error}")),
     }
 }
@@ -2469,4 +2671,99 @@ pub async fn agent_directory(State(state): State<AppState>, headers: HeaderMap) 
     }
 
     Json(json!({ "agents": agents })).into_response()
+}
+
+/// List rows from a backend collection payload (`items` or `agents` array).
+fn row_list(value: &Value) -> Vec<Value> {
+    value
+        .get("items")
+        .or_else(|| value.get("agents"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn index_by_name(rows: &[Value]) -> std::collections::HashMap<String, Value> {
+    rows.iter()
+        .filter_map(|row| {
+            let name = row.get("name")?.as_str()?.to_string();
+            Some((name, row.clone()))
+        })
+        .collect()
+}
+
+/// GET /api/bff/actors — unified actor DTO joining Hive runtime agents,
+/// Argus machine identities, and Patroclus agent records (correlated by
+/// name). Selectors in the Hub use `hive_id`; emergency actions must use
+/// `patroclus_id`.
+pub async fn actors_list(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let hive_token = hive_service_token(&state).await;
+    let p_tok = svc_env(&state, "PATROCLUS_ADMIN_TOKEN");
+    let hive_fut = backend_get(
+        &state,
+        format!("{}/api/agents?limit=100&order=recent", hive_url()),
+        hive_token.as_deref(),
+    );
+    let patroclus_fut = backend_get(
+        &state,
+        format!("{}/v1/admin/agents", patroclus_url()),
+        p_tok.as_deref(),
+    );
+    let argus_fut = crate::console::argus_agents_list(&state);
+    let (hive, patroclus, argus_rows) = tokio::join!(hive_fut, patroclus_fut, argus_fut);
+
+    let hive_rows = hive.as_ref().map(row_list).unwrap_or_default();
+    let patroclus_rows = patroclus.as_ref().map(row_list).unwrap_or_default();
+    let argus_by_name = index_by_name(&argus_rows);
+    let patroclus_by_name = index_by_name(&patroclus_rows);
+
+    let record_id = |row: &Value| -> Option<String> {
+        row.get("id")
+            .or_else(|| row.get("agent_id"))
+            .and_then(Value::as_str)
+            .map(str::to_string)
+    };
+
+    let mut actors: Vec<Value> = Vec::new();
+    let mut seen_names: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for row in &hive_rows {
+        let Some(hive_id) = record_id(row) else {
+            continue;
+        };
+        let name = row
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        seen_names.insert(name.clone());
+        actors.push(json!({
+            "name": name,
+            "hive_id": hive_id,
+            "argus_id": argus_by_name.get(&name).and_then(&record_id).unwrap_or_default(),
+            "patroclus_id": patroclus_by_name.get(&name).and_then(&record_id).unwrap_or_default(),
+            "status": row.get("status").cloned().unwrap_or_else(|| json!("active")),
+        }));
+    }
+    // Argus identities that have no Hive runtime agent yet.
+    for row in &argus_rows {
+        let Some(name) = row.get("name").and_then(Value::as_str) else {
+            continue;
+        };
+        if seen_names.contains(name) {
+            continue;
+        }
+        seen_names.insert(name.to_string());
+        actors.push(json!({
+            "name": name,
+            "hive_id": Value::Null,
+            "argus_id": record_id(row).unwrap_or_default(),
+            "patroclus_id": patroclus_by_name.get(name).and_then(&record_id).unwrap_or_default(),
+            "status": row.get("status").cloned().unwrap_or_else(|| json!("active")),
+        }));
+    }
+
+    Json(json!({ "actors": actors })).into_response()
 }

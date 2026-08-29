@@ -87,7 +87,7 @@ test('Agents: register an agent in Hive via API and see it in the console', asyn
   await page.goto(BASE)
   await page.getByRole('button', { name: 'Agents', exact: true }).click()
   await expect(page.getByTestId('runtime-agents')).toBeVisible({ timeout: 15000 })
-  await expect(page.getByText(`E2E Agent ${runId}`)).toBeVisible({ timeout: 15000 })
+  await expect(page.getByTestId('runtime-agents').getByText(`E2E Agent ${runId}`)).toBeVisible({ timeout: 15000 })
 })
 
 // ── 4. MCP servers: create + associate with an agent ─────────────────────────

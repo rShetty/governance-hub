@@ -9,7 +9,7 @@ use axum::{
     Json,
 };
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{json, Value};
 
 const SESSION_COOKIE: &str = auth::SESSION_COOKIE;
 
@@ -231,7 +231,7 @@ pub async fn me(headers: HeaderMap, State(state): State<AppState>) -> Response {
 // ---------------------------------------------------------------------------
 
 #[allow(clippy::result_large_err)]
-async fn argus_get(
+pub(crate) async fn argus_get(
     state: &AppState,
     path: &str,
     _user_session: Option<&str>,
@@ -291,6 +291,39 @@ pub async fn identities(State(state): State<AppState>, headers: HeaderMap) -> Re
 
 fn r_into_json(_r: Response) -> serde_json::Value {
     json!({})
+}
+
+/// Argus machine-identity directory fetched server-to-server as the hub's
+/// registered confidential client. Returns an empty list when the IdP is
+/// unreachable so unified-actor correlation degrades gracefully.
+pub(crate) async fn argus_agents_list(state: &AppState) -> Vec<Value> {
+    match argus_get(state, "/api/admin/agents", None).await {
+        Ok(body) => body
+            .get("agents")
+            .cloned()
+            .unwrap_or(json!([]))
+            .as_array()
+            .cloned()
+            .unwrap_or_default(),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// Argus audit events (identity/consent lifecycle) fetched server-to-server.
+/// Returns an empty list when the IdP is unreachable so the activity feed
+/// degrades gracefully.
+pub(crate) async fn argus_audit_list(state: &AppState) -> Vec<Value> {
+    match argus_get(state, "/api/admin/audit", None).await {
+        Ok(body) => body
+            .get("events")
+            .or_else(|| body.get("items"))
+            .cloned()
+            .unwrap_or(json!([]))
+            .as_array()
+            .cloned()
+            .unwrap_or_default(),
+        Err(_) => Vec::new(),
+    }
 }
 
 // ---------------------------------------------------------------------------

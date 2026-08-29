@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ConfirmDialog, PromptDialog, ResourceSelect, useToast, WizardModal } from '../components.jsx'
+import { ConfirmDialog, PromptDialog, ResourceSelect, useToast } from '../components.jsx'
 
 export default function Access() {
   const [policies, setPolicies] = useState(null)
@@ -9,13 +9,6 @@ export default function Access() {
   const [message, setMessage] = useState(null)
   const [selectedSession, setSelectedSession] = useState(null)
   const [resources, setResources] = useState([])
-  const [policyDraft, setPolicyDraft] = useState({
-    name: '',
-    effect: 'allow',
-    actions: ['call'],
-    resources: [],
-    reason: '',
-  })
   const [simulation, setSimulation] = useState({ action: 'call', resource: '', result: null })
   const toast = useToast()
   const [approvalDialog, setApprovalDialog] = useState(null)
@@ -23,9 +16,12 @@ export default function Access() {
   const [busyAction, setBusyAction] = useState('')
   const [killSessionId, setKillSessionId] = useState(null)
   const [grantDialog, setGrantDialog] = useState(null)
-  const [policyWizard, setPolicyWizard] = useState(false)
-  const [policyStep, setPolicyStep] = useState(0)
+  const [resourceDialog, setResourceDialog] = useState(false)
+  const [delegationDialog, setDelegationDialog] = useState(false)
   const [agents, setAgents] = useState([])
+  const [denyDialog, setDenyDialog] = useState(null)
+  const [policyDelete, setPolicyDelete] = useState(null)
+  const [resourceDetail, setResourceDetail] = useState(null)
 
   const loadPolicies = () => {
     fetch('/api/bff/policies')
@@ -55,16 +51,17 @@ export default function Access() {
       .catch(() => setAgents([]))
   }, [])
 
-  const createResource = async (event) => {
-    event.preventDefault()
-    const form = event.currentTarget
+  const createResource = async ({ name, uri }) => {
+    if (!name?.trim() || !uri?.trim()) return
     const response = await fetch('/api/bff/access/resources', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: form.name.value, uri: form.uri.value, actions: ['call'] }),
+      body: JSON.stringify({ name: name.trim(), uri: uri.trim(), actions: ['call'] }),
     })
     const body = await response.json().catch(() => ({}))
     setMessage({ ok: response.ok, text: response.ok ? `Resource ${body.name ?? body.id} created.` : body.error })
+    if (response.ok) { toast.success(`Resource ${body.name ?? body.id} created.`); setResources((current) => [...current, { id: body.id ?? name, name: body.name ?? name }]) }
+    setResourceDialog(false)
   }
 
   const resolveApproval = async (approvalId, reason = 'Approved from Governance Hub') => {
@@ -79,6 +76,42 @@ export default function Access() {
     if (response.ok) setApprovals((current) => current.filter((item) => item.id !== approvalId))
   }
 
+  const denyApproval = async (dialogValues) => {
+    const approvalId = denyDialog?.id
+    const reason = dialogValues?.reason?.trim()
+    if (!approvalId || !reason) return
+    const response = await fetch(`/api/bff/access/approvals/${encodeURIComponent(approvalId)}/deny`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    })
+    const body = await response.json().catch(() => ({}))
+    setMessage({ ok: response.ok, text: response.ok ? `Approval ${approvalId} denied.` : body.error })
+    if (response.ok) { toast.success(`Approval ${approvalId} denied.`) } else { toast.error(body.error || 'Denial failed.') }
+    if (response.ok) setApprovals((current) => current.filter((item) => item.id !== approvalId))
+    setDenyDialog(null)
+  }
+
+  const deletePolicy = async () => {
+    const policyId = policyDelete?.id
+    if (!policyId) return
+    const response = await fetch(`/api/bff/policies/${encodeURIComponent(policyId)}`, { method: 'DELETE' })
+    const body = await response.json().catch(() => ({}))
+    setMessage({ ok: response.ok, text: response.ok ? `Policy ${policyDelete.name} deleted.` : body.error })
+    if (response.ok) { toast.success(`Policy ${policyDelete.name} deleted.`) } else { toast.error(body.error || 'Delete failed.') }
+    if (response.ok) setPolicies((current) => {
+      const rows = Array.isArray(current) ? current : current?.policies ?? []
+      return rows.filter((item) => String(item.id ?? item.name) !== String(policyId))
+    })
+    setPolicyDelete(null)
+  }
+
+  const openResourceDetail = async (resourceId) => {
+    const response = await fetch(`/api/bff/access/resources/${encodeURIComponent(resourceId)}`)
+    const body = await response.json().catch(() => ({}))
+    setResourceDetail(response.ok ? body : { error: body.error || `status ${response.status}` })
+  }
+
   const issueDelegationWithAgent = async (agentId, scopes, expiresIn = 900) => {
     const response = await fetch('/api/bff/access/delegations', {
       method: 'POST',
@@ -90,7 +123,7 @@ export default function Access() {
       }),
     })
     const body = await response.json().catch(() => ({}))
-    if (response.ok) { toast.success(`Delegation ${body.grant_id} issued.`) } else { toast.error(body.error || 'Delegation failed.') }
+    if (response.ok) { toast.success(`Delegation ${body.grant_id} issued.`); setDelegationDialog(false) } else { toast.error(body.error || 'Delegation failed.') }
   }
 
   const killSession = async (sessionId) => {
@@ -129,59 +162,6 @@ export default function Access() {
     setGrantDialog(null)
   }
 
-  const runSimulation = async (event) => {
-    event.preventDefault()
-    const response = await fetch('/api/bff/access/simulate', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        action: simulation.action,
-        resource: simulation.resource,
-        requested_scopes: [],
-        definition: draftYaml(policyDraft),
-      }),
-    })
-    const body = await response.json().catch(() => ({}))
-    setSimulation((current) => ({ ...current, result: response.ok ? body : { error: body.error } }))
-  }
-
-  const updateRule = (patch) => {
-    setPolicyDraft((current) => ({ ...current, ...patch }))
-  }
-
-  const draftYaml = (draft) => [
-    '- name: ' + JSON.stringify(draft.name || 'untitled-policy'),
-    `  actions: ${JSON.stringify(draft.actions.filter(Boolean))}`,
-    `  resources: ${JSON.stringify(draft.resources.filter(Boolean))}`,
-    `  decision: ${draft.effect}`,
-    ...(draft.reason.trim() ? [`  reason: ${JSON.stringify(draft.reason.trim())}`] : []),
-  ].join('\n')
-
-  const policyDraftValid = policyDraft.name.trim().length >= 3
-    && policyDraft.actions.some((action) => action.trim())
-    && policyDraft.resources.some((resource) => resource.trim())
-
-  const savePolicy = async () => {
-    if (!policyDraftValid) return
-    const response = await fetch('/api/bff/policies', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        name: policyDraft.name.trim(),
-        engine: 'yaml',
-        definition: draftYaml(policyDraft),
-      }),
-    })
-    const body = await response.json().catch(() => ({}))
-    if (!response.ok) {
-      toast.error(body.error || 'Policy creation failed.')
-      return
-    }
-    toast.success(`Policy ${policyDraft.name} saved.`)
-    setPolicyDraft({ name: '', effect: 'allow', actions: ['call'], resources: [], reason: '' })
-    loadPolicies()
-  }
-
   const list = Array.isArray(policies)
     ? policies
     : Array.isArray(policies?.policies)
@@ -203,6 +183,7 @@ export default function Access() {
           <div key={item.id} className="px-4 py-2 border-t border-[#232833]/60 flex items-center gap-2">
             <span className="text-xs font-mono text-slate-400">{item.id}</span>
             <button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`approve-${item.id}`} onClick={() => setApprovalDialog({ id: item.id, values: {} })}>Approve</button>
+            <button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`deny-${item.id}`} onClick={() => setDenyDialog({ id: item.id, values: {} })}>Deny</button>
           </div>
         )) : <div className="p-6 text-sm text-slate-600">No pending approvals.</div>}
       </section>
@@ -224,45 +205,95 @@ export default function Access() {
           {selectedSession.error ? (
             <p className="text-sm text-rose-400">{selectedSession.error}</p>
           ) : (
-            <pre className="mt-3 text-xs font-mono text-slate-300 whitespace-pre-wrap">{JSON.stringify(selectedSession, null, 2)}</pre>
+            <div className="mt-3 grid gap-4">
+              <div className="grid gap-2 md:grid-cols-2">
+                <div><span className="label">Session</span><p className="font-mono text-xs text-slate-300">{selectedSession.session_id}</p></div>
+                <div><span className="label">Principal</span><p className="font-mono text-xs text-slate-300">{selectedSession.agent_id}</p></div>
+                <div><span className="label">Actions</span><p className="text-sm text-slate-300">{selectedSession.actions_count}</p></div>
+                <div><span className="label">Trust level</span><p className="text-sm text-slate-300">{selectedSession.trust_level}</p></div>
+              </div>
+              {Array.isArray(selectedSession.trajectory) && selectedSession.trajectory.length > 0 && (
+                <div data-testid="session-trajectory">
+                  <span className="label">Trajectory</span>
+                  <ol className="mt-2 space-y-2 border-l border-[#232833] pl-4">
+                    {selectedSession.trajectory.map((step, index) => (
+                      <li key={index} className="text-xs text-slate-300">
+                        <span className="font-mono text-[10px] text-slate-500">{step.ts}</span>{' '}
+                        <span className="badge badge-mono !text-[10px]">{step.kind}</span>{' '}
+                        {step.summary}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+              {selectedSession.constraints && (
+                <div data-testid="session-constraints">
+                  <span className="label">Constraints</span>
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-300">
+                    {(selectedSession.constraints.scopes ?? []).map((scope) => <span key={scope} className="badge badge-mono !text-[10px]">{scope}</span>)}
+                    {selectedSession.constraints.rate_limit_rpm != null && <span className="badge !text-[10px]">RPM ≤ {selectedSession.constraints.rate_limit_rpm}</span>}
+                    {selectedSession.constraints.monthly_budget_usd != null && <span className="badge !text-[10px]">Budget ${selectedSession.constraints.monthly_budget_usd}</span>}
+                    {selectedSession.constraints.spend_total_usd != null && <span className="badge !text-[10px]">Spent ${selectedSession.constraints.spend_total_usd}</span>}
+                    {selectedSession.constraints.expires_at && <span className="badge !text-[10px]">Expires {selectedSession.constraints.expires_at}</span>}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </section>
       )}
 
-      <section className="panel p-5" data-testid="token-revocation">
-        <h2 className="font-semibold">Revoke token</h2>
-        <p className="text-xs text-slate-500 mt-1">Immediately rejects the supplied JTI at Patroclus.</p>
-        <button className="btn btn-primary mt-3" data-testid="open-token-revocation" onClick={() => setTokenDialog({ values: {} })}>Revoke token</button>
-      </section>
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold">Create and revoke</h2>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="btn" onClick={() => setResourceDialog(true)} data-testid="open-resource-dialog">Resource</button>
+          <button type="button" className="btn" onClick={() => setDelegationDialog(true)} data-testid="open-delegation-dialog">Delegation</button>
+          <button type="button" className="btn btn-primary" data-testid="open-token-revocation" onClick={() => setTokenDialog({ values: {} })}>Revoke token</button>
+        </div>
+      </div>
 
       <section className="panel overflow-hidden" data-testid="resource-list">
         <div className="px-4 py-3 border-b border-[#232833]"><span className="label">Protected resources</span></div>
         {resources.length ? resources.map((resource) => (
-          <div key={resource.id} className="px-4 py-2 border-t border-[#232833]/60 text-sm text-slate-300">{resource.name}</div>
+          <div key={resource.id} className="px-4 py-2 border-t border-[#232833]/60 flex items-center gap-2 text-sm text-slate-300">
+            <span>{resource.name}</span>
+            <button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`resource-detail-${resource.id}`} onClick={() => openResourceDetail(resource.id)}>Detail</button>
+          </div>
         )) : <div className="p-6 text-sm text-slate-600">No resources registered.</div>}
       </section>
 
-      <form className="panel p-5 space-y-3" onSubmit={createResource}>
-        <h2 className="font-semibold">Create resource</h2>
-        <input name="name" required placeholder="resource name" />
-        <input name="uri" required placeholder="api/service/*" />
-        <button className="btn btn-primary">Create</button>
-      </form>
+      {resourceDialog && (
+        <PromptDialog
+          open
+          title="Create protected resource"
+          description="Resources are enforced by Patroclus policies."
+          fields={[
+            { name: 'name', label: 'Resource name' },
+            { name: 'uri', label: 'Resource pattern', value: 'api/service/*' },
+          ]}
+          submitLabel="Create resource"
+          busy={busyAction === 'resource'}
+          onSubmit={(values) => createResource({ name: values.name, uri: values.uri })}
+          onCancel={() => setResourceDialog(null)}
+        />
+      )}
 
-      <form className="panel p-5 space-y-3" data-testid="delegation-form" onSubmit={(event) => {
-        event.preventDefault()
-        issueDelegationWithAgent(
-          new FormData(event.currentTarget).get('agent_id'),
-          new FormData(event.currentTarget).get('scopes'),
-          new FormData(event.currentTarget).get('expires'),
-        )
-      }}>
-        <h2 className="font-semibold">Issue delegation</h2>
-        <ResourceSelect label="Agent" name="agent_id" options={agents} />
-        <input name="scopes" required placeholder="relay:call,miser:route" />
-        <label className="grid gap-2 text-sm"><span className="label">Expires in seconds</span><input name="expires" type="number" min="60" defaultValue="900" /></label>
-        <button className="btn btn-primary" data-testid="delegation-submit">Issue</button>
-      </form>
+      {delegationDialog && (
+        <PromptDialog
+          open
+          title="Issue delegation"
+          description="Grant scoped, time-limited access to a selected agent."
+          fields={[
+            { name: 'agent_id', label: 'Agent', type: 'select', options: agents.map(({ id, name, status }) => ({ id, name: `${name}${status ? ` · ${status}` : ''}` })) },
+            { name: 'scopes', label: 'Scopes', value: 'relay:call,miser:route' },
+            { name: 'expires', label: 'Expires in seconds', type: 'number', value: 900 },
+          ]}
+          submitLabel="Issue delegation"
+          busy={busyAction === 'delegation'}
+          onSubmit={(values) => issueDelegationWithAgent(values.agent_id, values.scopes, values.expires)}
+          onCancel={() => setDelegationDialog(null)}
+        />
+      )}
 
       <section className="panel p-5">
         <h2 className="font-semibold">Grants</h2>
@@ -310,6 +341,46 @@ export default function Access() {
         />
       )}
 
+      {denyDialog && (
+        <PromptDialog
+          open
+          title="Deny approval"
+          description={`Approval ${denyDialog.id} will be rejected and audited.`}
+          fields={[{ name: 'reason', label: 'Required reason', textarea: true }]}
+          submitLabel="Deny approval"
+          busy={busyAction === 'deny'}
+          onSubmit={denyApproval}
+          onCancel={() => setDenyDialog(null)}
+        />
+      )}
+
+      {policyDelete && (
+        <ConfirmDialog
+          open
+          title="Delete policy"
+          message={`Policy ${policyDelete.name} (${policyDelete.id}) will be removed from Patroclus. This cannot be undone.`}
+          confirmLabel="Delete policy"
+          danger
+          busy={busyAction === 'policy-delete'}
+          onConfirm={deletePolicy}
+          onCancel={() => setPolicyDelete(null)}
+        />
+      )}
+
+      {resourceDetail && (
+        <PromptDialog
+          open
+          title={`Resource detail · ${resourceDetail.name ?? resourceDetail.id}`}
+          description={resourceDetail.error
+            ? `Could not load detail — ${resourceDetail.error}`
+            : `${resourceDetail.uri ?? '—'} · actions: ${(resourceDetail.actions ?? []).join(', ') || '—'} · sensitivity: ${resourceDetail.sensitivity ?? '—'} · owner: ${resourceDetail.owner ?? '—'} · linked policies: ${resourceDetail.policies_count ?? 0}`}
+          fields={[]}
+          submitLabel="Close"
+          onSubmit={() => setResourceDetail(null)}
+          onCancel={() => setResourceDetail(null)}
+        />
+      )}
+
       {killSessionId && (
         <ConfirmDialog
           open
@@ -321,93 +392,6 @@ export default function Access() {
           onConfirm={async () => { await killSession(killSessionId); setKillSessionId(null) }}
           onCancel={() => setKillSessionId(null)}
         />
-      )}
-
-      <div className="flex items-center justify-between">
-        <h2 className="font-semibold">Access policies</h2>
-        <button type="button" className="btn btn-primary" data-testid="open-policy-wizard" onClick={() => { setPolicyWizard(true); setPolicyStep(0) }}>Create policy</button>
-      </div>
-
-      {policyWizard && (
-      <WizardModal
-        open={policyWizard}
-        title="Create access policy"
-        description="A guided, validated workflow. Patroclus remains the enforcement authority."
-        steps={['Policy', 'Scope', 'Review']}
-        activeStep={policyStep}
-        onNext={() => {
-          if (policyStep === 0) setSimulation({ action: policyDraft.actions[0] || 'call', resource: policyDraft.resources[0] || '', result: null })
-          setPolicyStep((step) => step + 1)
-        }}
-        onBack={() => setPolicyStep((step) => Math.max(0, step - 1))}
-        onFinish={savePolicy}
-        canContinue={policyStep === 0 ? policyDraft.name.trim().length >= 3 : policyDraftValid}
-        busy={busyAction === 'policy'}
-        finishLabel="Save policy"
-        onCancel={() => setPolicyWizard(false)}
-      >
-        <form className="grid gap-5" onSubmit={(event) => { event.preventDefault(); if (policyStep < 2) { if (policyStep === 0) setSimulation({ action: policyDraft.actions[0] || 'call', resource: policyDraft.resources[0] || '', result: null }); setPolicyStep(policyStep + 1) } }}>
-          <label className="grid gap-2">
-            <span className="label">Policy name</span>
-            <input data-testid="policy-name" value={policyDraft.name} onChange={(event) => updateRule({ name: event.target.value })} placeholder="allow-github-read" required minLength={3} />
-          </label>
-
-          {policyStep >= 1 && (
-            <>
-              <fieldset className="grid gap-3">
-                <legend className="label mb-2">Decision</legend>
-                <div className="flex flex-wrap gap-3">
-                  {['allow', 'deny'].map((effect) => (
-                    <button key={effect} type="button" onClick={() => updateRule({ effect })} className={`btn ${policyDraft.effect === effect ? (effect === 'allow' ? 'btn-primary' : 'btn-danger') : ''}`} data-testid={`policy-effect-${effect}`}>
-                      {effect === 'allow' ? 'Allow' : 'Deny'}
-                    </button>
-                  ))}
-                </div>
-              </fieldset>
-
-          <label className="grid gap-2">
-            <span className="label">Actions</span>
-            <input data-testid="policy-actions" value={policyDraft.actions.join(',')} onChange={(event) => updateRule({ actions: event.target.value.split(',').map((item) => item.trim()) })} placeholder="call, read" />
-            <span className="text-xs text-[#8d97a6]">Comma separated. Use * only when the intent is intentionally broad.</span>
-          </label>
-
-            <label className="grid gap-2">
-              <span className="label">Resources</span>
-              <input data-testid="policy-resources" value={policyDraft.resources.join(',')} onChange={(event) => updateRule({ resources: event.target.value.split(',').map((item) => item.trim()) })} placeholder="mcp/github/*" />
-              <span className="text-xs text-[#8d97a6]">Comma separated resource patterns.</span>
-            </label>
-          </>
-          )}
-
-          {policyStep === 2 && (
-          <>
-            <label className="grid gap-2"><span className="label">Business reason</span><input data-testid="policy-reason" value={policyDraft.reason} onChange={(event) => updateRule({ reason: event.target.value })} placeholder="Why this exception exists" /></label>
-
-            <div className="inset grid gap-4 p-4">
-              <div className="grid gap-3 md:grid-cols-2">
-                <label className="grid gap-2"><span className="label">Simulate action</span><input data-testid="simulate-action" value={simulation.action} onChange={(event) => setSimulation({ ...simulation, action: event.target.value })} /></label>
-                <label className="grid gap-2"><span className="label">Simulate resource</span><input data-testid="simulate-resource" value={simulation.resource} onChange={(event) => setSimulation({ ...simulation, resource: event.target.value })} /></label>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <button type="button" className="btn" disabled={!policyDraftValid} onClick={() => runSimulation({ preventDefault() {} })} data-testid="simulate-run">Preview decision</button>
-                {!simulation.result && <span className="text-sm text-[#8d97a6]">Preview before saving.</span>}
-              </div>
-              {simulation.result && (
-                <div className={`rounded-xl border p-4 ${simulation.result.decision === 'allow' ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-rose-500/30 bg-rose-500/10'}`} data-testid="simulation-result">
-                  <strong>{String(simulation.result.decision).toUpperCase()}</strong>
-                  <p className="mt-1 text-sm">{simulation.result.reason}</p>
-                </div>
-              )}
-            </div>
-
-            <details className="inset rounded-xl p-4" open>
-              <summary className="cursor-pointer label">Generated definition</summary>
-              <pre className="mt-3 overflow-auto text-xs font-mono text-[#c9d1de]" data-testid="policy-definition">{draftYaml(policyDraft)}</pre>
-            </details>
-          </>
-          )}
-        </form>
-      </WizardModal>
       )}
 
       {message && <div className={message.ok ? 'text-sm text-teal-300' : 'text-sm text-rose-400'}>{message.text}</div>}
@@ -424,11 +408,14 @@ export default function Access() {
                 <td className="text-slate-200">{p.name}</td>
                 <td><span className="badge badge-mono !text-[10px]">{p.engine}</span></td>
                 <td><span className="badge badge-ok">{p.status ?? 'active'}</span></td>
-                    <td><button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`inspect-policy-${p.id ?? p.name}`} onClick={() => {
-                      const policy = list.find((item) => String(item.id) === String(p.id ?? p.name))
-                      setSimulation((current) => ({ ...current, action: current.action, resource: current.resource, result: null }))
-                      setMessage({ ok: !!policy, text: policy ? `Policy ${policy.name}` : 'Policy definition unavailable.' })
-                    }}>Details</button></td>
+                    <td className="space-x-1">
+                      <button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`inspect-policy-${p.id ?? p.name}`} onClick={() => {
+                        const policy = list.find((item) => String(item.id) === String(p.id ?? p.name))
+                        setSimulation((current) => ({ ...current, action: current.action, resource: current.resource, result: null }))
+                        setMessage({ ok: !!policy, text: policy ? `Policy ${policy.name}` : 'Policy definition unavailable.' })
+                      }}>Details</button>
+                      <button className="btn btn-ghost !py-1 !px-2 !text-[11px] !text-rose-400" data-testid={`delete-policy-${p.id ?? p.name}`} onClick={() => setPolicyDelete({ id: p.id ?? p.name, name: p.name })}>Delete</button>
+                    </td>
               </tr>
             ))}
             {!list.length && !err && (

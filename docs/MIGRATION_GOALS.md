@@ -39,7 +39,7 @@ flow can be exercised end to end.
 
 ## Phase 2 - Identity Lifecycle
 
-- [~] Unified actor detail model linking Argus, Hive, and Patroclus IDs (Agents view shows both rosters; full cross-ID correlation is future work).
+- [x] Unified actor detail model linking Argus, Hive, and Patroclus IDs (`GET /api/bff/actors` unified DTO; Agents view shows Hive/Argus/Patroclus IDs; selectors use Hive IDs, emergency actions use Patroclus IDs — proven by `tests/e2e/identity-correlation.spec.js`).
 - [x] Mint machine identity from Agents UI.
 - [x] Revoke and restore Argus identities.
 - [x] Create Hive runtime agents.
@@ -54,14 +54,14 @@ flow can be exercised end to end.
 
 ## Phase 3 - Access Operations
 
-- [x] Resource list/create/detail management (resource list/create implemented; detail view pending).
-- [x] Policy create/read/edit/delete management (create/read/inspect/simulate/delete via proxy; dedicated delete UI pending).
-- [x] Approval queue approve/deny actions (approve implemented; deny endpoint added but UI toggle pending).
+- [x] Resource list/create/detail management (list, create dialog, and detail dialog via `GET /api/bff/access/resources/{id}`).
+- [x] Policy create/read/edit/delete management (create wizard, inspect details, and confirmed delete dialog via `DELETE /api/bff/policies/{id}`).
+- [x] Approval queue approve/deny actions (approve and deny dialogs with recorded reason and operator attribution).
 - [x] Delegation issuance and grant revocation.
-- [~] Session inspector with trajectory and constraints (session detail endpoint exists; full trajectory visualization pending).
+- [x] Session inspector with trajectory and constraints (session detail renders a step-by-step trajectory timeline plus scope/quota/budget/expiry constraints).
 - [x] Session kill action.
 - [x] Token revocation action.
-- [~] Policy simulator using Patroclus check-access (advisory YAML simulation works; authenticated check-access integration pending).
+- [x] Policy simulator: draft YAML preview plus authenticated Patroclus check-access against the live policy engine (`POST /api/bff/access/check-access`; wizard shows both decisions).
 - [x] Show simulation result before policy save.
 - [x] Cover all access operations through local Playwright (approve, deny, session inspect/kill, token revoke, policy simulate/create, resource create/list, delegation issue/revoke — all tested).
 
@@ -147,12 +147,30 @@ flow can be exercised end to end.
 - [x] Confirm every operator journey starts and ends in the Hub via final
   Playwright verification (`tests/e2e/final-hub-journey.spec.js`).
 
-## Migration Status: Complete
+## Migration Status
 
-All Governance Hub-owned operator flows are implemented and proven by local UI
-Playwright tests. The only remaining actions are operational deployment changes
-listed in the Production Cutover Checklist; these are infrastructure configuration
-changes on individual services, not missing Governance Hub functionality.
+Governance Hub operator flows are implemented and proven by the local UI
+Playwright suite (zero failures, zero skipped). Completed and proven phases:
+identity lifecycle and cross-service actor correlation, access operations
+(policies, resources, approvals, delegations, sessions, tokens, authenticated
+check-access), unified catalog and tool execution, supply chain trust, cost
+administration, unified activity, risk and compliance, and backend UI
+retirement.
+
+Remaining work before final delivery:
+- Modal-based UX completion for Egress, Cost, Supply Chain, Orchestration,
+  Services, and the remaining inline flows (in progress).
+- Pagination coverage for every list view and removal of the global
+  mobile-hide rule for `table.data`.
+- Routing remaining direct service calls through normalized BFF endpoints with
+  structured degraded states and retry behavior.
+- Hive teams/workflows proof in the Hub Orchestration view.
+- Production cutover (reverse-proxy restrictions on backend UIs, removal of
+  insecure development flags, real-service smoke tests).
+
+The Production Cutover Checklist below lists operational deployment changes on
+individual services; these are infrastructure configuration changes, not
+missing Governance Hub functionality.
 
 ## Production Cutover Checklist (Backend Hardening)
 

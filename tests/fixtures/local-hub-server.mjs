@@ -21,10 +21,13 @@ const miserKeys = [{
   active: true,
 }]
 const runtimeAgents = []
+const patroclusAgents = [
+  { id: 'ptr_e2e_001', name: 'Fixture Agent', status: 'active' },
+]
 const mcpServers = [
   { id: 'server-e2e', name: 'Fixture MCP server', transport: 'sse', url: 'https://mcp.example.test/sse', description: '', authorized_agents: ['agt_e2e_001'] },
 ]
-const policies = [{ id: 'pol_e2e_001', name: 'allow-github', engine: 'yaml', status: 'active', definition: '- name: allow-github\n  decision: allow' }]
+const policies = [{ id: 'pol_e2e_001', name: 'allow-github', engine: 'yaml', status: 'active', definition: '- name: allow-github\n  actions: ["call"]\n  resources: ["server-e2e/*"]\n  decision: allow' }]
 const services = []
 for (let index = 0; index < 60; index++) {
   mcpServers.push({
@@ -274,6 +277,13 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
+  if (path.match(/^\/api\/bff\/policies\/[^/]+$/) && request.method === 'DELETE') {
+    const policyId = decodeURIComponent(path.split('/').at(-1))
+    const index = policies.findIndex(item => item.id === policyId || item.name === policyId)
+    if (index >= 0) policies.splice(index, 1)
+    return send(response, index >= 0 ? 200 : 404, index >= 0 ? { deleted: policyId } : { error: 'policy not found' })
+  }
+
   if (path === '/api/svc/hive/api/agents') {
     return send(response, 200, runtimeAgents)
   }
@@ -311,6 +321,20 @@ const server = http.createServer(async (request, response) => {
       trust_level: 0.95,
       killed: false,
       trajectory_length: 7,
+      trajectory: [
+        { ts: new Date(Date.now() - 60_000).toISOString(), kind: 'session.start', summary: 'Session opened for agt_e2e_001' },
+        { ts: new Date(Date.now() - 45_000).toISOString(), kind: 'policy.evaluate', summary: 'allow-github matched → allow call mcp/github' },
+        { ts: new Date(Date.now() - 30_000).toISOString(), kind: 'tool.invoke', summary: 'relay:call mcp/github/read_data' },
+        { ts: new Date(Date.now() - 15_000).toISOString(), kind: 'policy.evaluate', summary: 'allow-github matched → allow call mcp/github' },
+        { ts: new Date().toISOString(), kind: 'tool.invoke', summary: 'relay:call mcp/github/list_issues' },
+      ],
+      constraints: {
+        scopes: ['relay:call', 'miser:route'],
+        rate_limit_rpm: 120,
+        monthly_budget_usd: 50,
+        spend_total_usd: 0.25,
+        expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+      },
     })
   }
 
@@ -319,16 +343,16 @@ const server = http.createServer(async (request, response) => {
     return send(response, 200, { decision: 'approved', operator: 'e2e@governance.test' })
   }
 
-  if (path === '/api/bff/access/sessions/ses_e2e_001' && request.method === 'GET') {
-    return send(response, 200, {
-      session_id: 'ses_e2e_001',
-      agent_id: 'agt_e2e_001',
-      actions_count: 7,
-      spend_total: 0.25,
-      trust_level: 0.95,
-      killed: false,
-      trajectory_length: 7,
+  if (path.match(/^\/api\/bff\/access\/approvals\/[^/]+\/deny$/) && request.method === 'POST') {
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      if (!body.reason) return send(response, 400, { error: 'reason required' })
+      // Patroclus keeps the approval record with a denied decision.
+      send(response, 200, { decision: 'denied', operator: 'e2e@governance.test', reason: body.reason })
     })
+    return
   }
 
   if (path === '/api/bff/access/sessions/ses_e2e_001/kill' && request.method === 'POST') {
@@ -339,9 +363,14 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (path.match(/^\/api\/bff\/agents\/[^/]+\/emergency-kill$/) && request.method === 'POST') {
+    const agentId = path.split('/')[4]
     let raw = ''
     request.on('data', chunk => { raw += chunk })
-    request.on('end', () => send(response, 200, { operator: 'e2e@governance.test', ...(JSON.parse(raw || '{}')) }))
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      if (!agentId || !body.reason) return send(response, 400, { error: 'agent id and reason required' })
+      send(response, 200, { agent_id: agentId, status: 'killed', operator: 'e2e@governance.test', ...body })
+    })
     return
   }
 
@@ -355,12 +384,16 @@ const server = http.createServer(async (request, response) => {
 
   if (path === '/api/bff/activity') {
     const source = new URL(request.url, 'http://localhost').searchParams.get('source')
+    const now = Date.now()
     const all = [
-        { source: 'patroclus', kind: 'policy.evaluate', summary: 'mcp/github', ts: new Date().toISOString() },
-        { source: 'miser', kind: 'key.active', summary: 'playwright-agent', ts: new Date().toISOString() },
-        { source: 'hive', kind: 'agent.registered', summary: 'fixture-agent', ts: new Date().toISOString() },
-        { source: 'sentiel', kind: 'dlp.violation', summary: 'API key pattern', ts: new Date().toISOString() },
-        { source: 'aegis', kind: 'egress.block', summary: 'evil.example.test', ts: new Date().toISOString() },
+        { source: 'patroclus', kind: 'policy.evaluate', summary: 'mcp/github', ts: new Date(now - 50_000).toISOString(), session_id: 'session-e2e' },
+        { source: 'miser', kind: 'key.active', summary: 'playwright-agent', ts: new Date(now - 40_000).toISOString() },
+        { source: 'hive', kind: 'agent.registered', summary: 'fixture-agent', ts: new Date(now - 30_000).toISOString() },
+        { source: 'sentiel', kind: 'dlp.violation', summary: 'API key pattern', ts: new Date(now - 20_000).toISOString() },
+        { source: 'aegis', kind: 'egress.block', summary: 'evil.example.test', ts: new Date(now - 10_000).toISOString() },
+        { source: 'argus', kind: 'identity.event', summary: 'consent granted: relay:call', ts: new Date(now - 8_000).toISOString() },
+        { source: 'forge', kind: 'package.signed', summary: 'governance-agent 1.2.0', ts: new Date(now - 6_000).toISOString() },
+        { source: 'relay', kind: 'tool.invoke', summary: 'mcp/github/read_data', ts: new Date(now - 4_000).toISOString() },
     ]
     return send(response, 200, {
       schema: 'governance.activity.v1',
@@ -381,8 +414,11 @@ const server = http.createServer(async (request, response) => {
     return send(response, 200, {
       session_id: 'session-e2e',
       events: [
-        { source: 'patroclus', ts: '2026-01-01T00:00:00Z', detail: { action: 'policy.evaluate' } },
-        { source: 'aegis', ts: '2026-01-01T00:00:01Z', detail: { action: 'egress.allowed' } },
+        { source: 'argus', ts: '2026-01-01T00:00:00Z', detail: { action: 'identity.event', summary: 'consent granted' } },
+        { source: 'patroclus', ts: '2026-01-01T00:00:01Z', detail: { action: 'policy.evaluate' } },
+        { source: 'relay', ts: '2026-01-01T00:00:02Z', detail: { action: 'tool.invoke', summary: 'mcp/github/read_data' } },
+        { source: 'aegis', ts: '2026-01-01T00:00:03Z', detail: { action: 'egress.allowed' } },
+        { source: 'forge', ts: '2026-01-01T00:00:04Z', detail: { action: 'package.signed' } },
       ],
     })
   }
@@ -396,6 +432,60 @@ const server = http.createServer(async (request, response) => {
 
   if (path === '/api/bff/access/grants/grant_e2e_001/revoke' && request.method === 'POST') {
     return send(response, 200, { result: { count: 1 } })
+  }
+
+  if (path === '/api/bff/access/check-access' && request.method === 'POST') {
+    let raw = ''
+    request.on('data', chunk => { raw += chunk })
+    request.on('end', () => {
+      const body = JSON.parse(raw || '{}')
+      // Evaluate the live Patroclus policy set for this principal/action/resource.
+      let matched = null
+      for (const policy of policies) {
+        const definition = policy.definition ?? ''
+        const decisionMatch = definition.match(/decision:\s*(\w+)/)
+        const actionsMatch = definition.match(/actions:\s*\[(.*?)\]/)
+        const resourcesMatch = definition.match(/resources:\s*\[(.*?)\]/)
+        if (!decisionMatch || !actionsMatch || !resourcesMatch) continue
+        const actions = actionsMatch[1].split(',').map(item => item.trim().replace(/"/g, ''))
+        const resources = resourcesMatch[1].split(',').map(item => item.trim().replace(/"/g, ''))
+        const actionOk = actions.some(action => action === body.action)
+        const resourceOk = resources.some(rule => (rule.endsWith('/*')
+          ? String(body.resource ?? '').startsWith(rule.slice(0, -2))
+          : rule === body.resource))
+        if (actionOk && resourceOk) { matched = { policy, decision: decisionMatch[1] }; break }
+      }
+      send(response, 200, {
+        authority: 'patroclus',
+        result: {
+          decision: matched?.decision ?? 'deny',
+          principal: body.agent_id,
+          matched_policy: matched?.policy.id ?? null,
+          reason: matched
+            ? `${matched.policy.id} (${matched.policy.name}) allows ${body.action} on ${body.resource}`
+            : `no policy grants ${body.action} on ${body.resource} for ${body.agent_id}`,
+        },
+      })
+    })
+    return
+  }
+
+  if (path === '/api/bff/access/resources' && request.method === 'GET') {
+    return send(response, 200, [{ id: 'res_e2e_001', name: 'Fixture API' }])
+  }
+
+  if (path.match(/^\/api\/bff\/access\/resources\/[^/]+$/) && request.method === 'GET') {
+    const resourceId = path.split('/').at(-1)
+    return send(response, 200, {
+      id: resourceId,
+      name: 'Fixture API',
+      uri: 'api/fixture/*',
+      actions: ['call'],
+      sensitivity: 'medium',
+      owner: 'e2e@governance.test',
+      policies_count: 1,
+      created_at: new Date().toISOString(),
+    })
   }
 
   if (path === '/api/bff/cost') {
@@ -572,9 +662,39 @@ const server = http.createServer(async (request, response) => {
       const body = JSON.parse(raw || '{}')
       const agent = { agent_id: `agent_${crypto.randomUUID().slice(0, 8)}`, status: 'active', ...body }
       runtimeAgents.push(agent)
-      send(response, 201, agent)
+      // Registering a runtime agent also provisions the matching Patroclus
+      // agent record so emergency actions can target the right principal.
+      const ptrId = `ptr_${crypto.randomUUID().slice(0, 8)}`
+      patroclusAgents.push({ id: ptrId, name: body.name, status: 'active' })
+      send(response, 201, { ...agent, patroclus_agent_id: ptrId })
     })
     return
+  }
+
+  if (path === '/api/bff/actors') {
+    const actors = []
+    for (const agent of runtimeAgents) {
+      const hiveId = agent.agent_id ?? agent.id
+      const name = agent.name
+      actors.push({
+        name,
+        hive_id: hiveId,
+        argus_id: identities.find(i => i.name === name)?.id ?? null,
+        patroclus_id: patroclusAgents.find(p => p.name === name)?.id ?? null,
+        status: agent.status ?? 'active',
+      })
+    }
+    for (const identity of identities) {
+      if (actors.some(actor => actor.name === identity.name)) continue
+      actors.push({
+        name: identity.name,
+        hive_id: null,
+        argus_id: identity.id,
+        patroclus_id: patroclusAgents.find(p => p.name === identity.name)?.id ?? null,
+        status: identity.status,
+      })
+    }
+    return send(response, 200, { actors })
   }
 
   if (path.match(/^\/api\/bff\/runtime-agents\/[^/]+\/health$/) && request.method === 'GET') {
@@ -591,10 +711,6 @@ const server = http.createServer(async (request, response) => {
 
   if (path === '/api/bff/catalog/relay/github/toggle' && request.method === 'POST') {
     return send(response, 200, { backend_id: 'github', enabled: false })
-  }
-
-  if (path === '/api/bff/access/resources' && request.method === 'GET') {
-    return send(response, 200, [{ id: 'res_e2e_001', name: 'Fixture API' }])
   }
 
   if (path === '/api/bff/policies' && request.method === 'GET') {
