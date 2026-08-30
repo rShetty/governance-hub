@@ -8,7 +8,7 @@ const SERVICES = [
   ['miser', process.env.LIVE_MISER_URL || 'http://127.0.0.1:8787/health/live'],
   ['sentiel', process.env.LIVE_SENTIEL_URL || 'http://127.0.0.1:8585/health'],
   ['aegis', process.env.LIVE_AEGIS_URL || 'http://127.0.0.1:8686/health'],
-  ['forge', process.env.LIVE_FORGE_URL || 'http://127.0.0.1:8788/health'],
+  ['forge', process.env.LIVE_FORGE_URL || 'http://127.0.0.1:18788/health'],
 ]
 
 const REQUIRED = process.env.LIVE_REQUIRED === '1'

@@ -50,17 +50,22 @@ if [ ! -d "$ROOT/relay/.venv" ]; then
 fi
 
 RELAY_PYTHON="$ROOT/relay/.venv/bin/python"
-if "$RELAY_PYTHON" --version 2>&1 | grep -q 'Python 3.14'; then
-  echo "relay Python 3.14 is incompatible; trying python3.12..." >&2
-  if command -v python3.12 >/dev/null 2>&1; then
-    RELAY_PYTHON=$(command -v python3.12)
-    if [ ! -d "$ROOT/relay/.venv312" ]; then
-      "$RELAY_PYTHON" -m venv "$ROOT/relay/.venv312"
-      "$ROOT/relay/.venv312/bin/pip" install -e "$ROOT/relay[dev]" >/dev/null
+if "$RELAY_PYTHON" --version 2>&1 | grep -qE 'Python 3\.(1[4-9]|[2-9][0-9])'; then
+  echo "relay venv Python is incompatible; looking for python3.12/3.11/3.10..." >&2
+  RELAY_PYTHON=""
+  for candidate in python3.12 python3.11 python3.10; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      VENV_DIR="$ROOT/relay/.venv${candidate#python3.}"
+      if [ ! -x "$VENV_DIR/bin/python" ]; then
+        "$candidate" -m venv "$VENV_DIR"
+        "$VENV_DIR/bin/pip" install -e "$ROOT/relay[dev]" >/dev/null
+      fi
+      RELAY_PYTHON="$VENV_DIR/bin/python"
+      break
     fi
-    RELAY_PYTHON="$ROOT/relay/.venv312/bin/python"
-  else
-    echo "python3.12 required to run Relay locally on this machine" >&2
+  done
+  if [ -z "$RELAY_PYTHON" ]; then
+    echo "python3.10-3.12 required to run Relay locally on this machine" >&2
     exit 1
   fi
 fi
