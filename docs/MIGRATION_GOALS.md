@@ -158,13 +158,23 @@ administration, unified activity, risk and compliance, and backend UI
 retirement.
 
 Remaining work before final delivery:
-- Real-service smoke tests against the deployed backends
-  (`npm run test:services`; use `LIVE_REQUIRED=1 npm run test:services` when
-  all services must be running).
-- Production cutover (reverse-proxy restrictions on backend UIs, removal of
-  insecure development flags, real-service smoke tests).
+- Verify the production cutover deploy runs land green and spot-check that
+  the tailnet-only vhosts are enforced on the VPS (they are installed
+  automatically by each service's deploy workflow, gated on `nginx -t`).
 
 Completed since the previous status:
+- Production cutover artifacts and automation shipped across all backend
+  repos: tailnet-only nginx vhosts committed in hive, relay, patroclus,
+  sentiel, argus, forge, and Aegis, and every deploy workflow now installs
+  its vhost (`/etc/nginx/sites-available/<svc>.conf`) with an `nginx -t`
+  gate before reload, so API/health routes stay up even if a cert is not
+  yet provisioned. The deploy runs for hive, patroclus, sentiel, Aegis,
+  and argus completed successfully.
+- Real-service smoke tests pass locally: all 7 backends plus Miser healthy
+  and `npm run test:services` green (9/9).
+- Dependency hardening triggered by the cutover runs: relay pins `mcp<2`
+  (2.x removed `mcp.server.fastmcp`) with the corresponding test-fake fix,
+  and forge bumps `h2` to 0.4.19 (RUSTSEC-2026-0258).
 - Modal-based UX is complete for Egress, Cost, Supply Chain, Orchestration,
   Services, and the Security containment flow (shared Modal, PromptDialog,
   WizardModal, and ConfirmDialog components; native confirm()/prompt()/alert()
@@ -193,7 +203,7 @@ Apply these deployment changes to each service after Hub validation:
 | Aegis | No product frontend found; keep API endpoints restricted by admin token. |
 | Argus | Keep OIDC/login/consent endpoints public as required by protocol; restrict `/api/admin/*` to Hub service client. |
 | Forge | No product frontend found; keep API behind internal network/admin token. |
-| All | Ensure production admin tokens are set, insecure development flags (`*_INSECURE_DEV=1`) are unset, and docs/metrics are not publicly exposed. |
+| All | Ensure production admin tokens are set, insecure development flags (`*_INSECURE_DEV=1`) are unset, and docs/metrics are not publicly exposed. Verified: no deploy unit or env template in any repo sets an insecure flag; the flags are opt-in code paths used only by local dev scripts. |
 
 ## Phase 9 Inventory
 
