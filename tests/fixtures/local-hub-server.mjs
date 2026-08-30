@@ -13,13 +13,29 @@ const sessions = [{ id: 'ses_e2e_001', agent_id: 'agt_e2e_001', active: true }]
 const miserKeys = [{
   id: 'key_e2e_001',
   owner: 'fixture-agent',
+  client: 'ci-pipeline',
   allowed_tiers: ['simple'],
   rate_limit_rpm: 120,
   monthly_budget_usd: 50,
   spend_total_usd: 1.25,
+  usage_30d: { requests: 42, prompt_tokens: 1200, completion_tokens: 3400, cost_usd: 1.25 },
   expires_at: Math.floor(Date.now() / 1000) + 86400,
   active: true,
 }]
+const miserUsage = {
+  requests: 42,
+  prompt_tokens: 1200,
+  completion_tokens: 3400,
+  cost_usd: 1.25,
+  by_model: {
+    'anthropic/claude-haiku': { requests: 30, prompt_tokens: 900, completion_tokens: 2400, cost_usd: 0.9 },
+    'openai/gpt-mini': { requests: 12, prompt_tokens: 300, completion_tokens: 1000, cost_usd: 0.35 },
+  },
+  by_tier: { simple: 42 },
+  by_key: { key_e2e_001: { client: 'ci-pipeline', requests: 42, prompt_tokens: 1200, completion_tokens: 3400, cost_usd: 1.25 } },
+  by_client: { 'ci-pipeline': { requests: 42, prompt_tokens: 1200, completion_tokens: 3400, cost_usd: 1.25 } },
+  by_day: {},
+}
 const runtimeAgents = []
 const patroclusAgents = [
   { id: 'ptr_e2e_001', name: 'Fixture Agent', status: 'active' },
@@ -490,6 +506,10 @@ const server = http.createServer(async (request, response) => {
 
   if (path === '/api/bff/cost') {
     return send(response, 200, { configured: true, keys: miserKeys })
+  }
+
+  if (path === '/api/bff/cost/usage' && request.method === 'GET') {
+    return send(response, 200, miserUsage)
   }
 
   if (path === '/api/bff/cost/health' && request.method === 'GET') {

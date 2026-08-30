@@ -12,15 +12,26 @@ test('Cost view shows quotas, expiry, spend, health, and audit integrity', async
   await expect(page.getByTestId('miser-key-key_e2e_001')).toContainText('simple')
   await expect(page.getByTestId('miser-key-key_e2e_001')).toContainText('120 RPM')
   await expect(page.getByTestId('miser-key-key_e2e_001')).toContainText('$50.00')
-  await expect(page.getByTestId('miser-key-key_e2e_001')).toContainText('$1.2500')
+  await expect(page.getByTestId('miser-key-key_e2e_001')).toContainText('ci-pipeline')
+  await expect(page.getByTestId('miser-key-key_e2e_001')).toContainText('42 req')
   await expect(page.getByTestId('spend-attribution')).toContainText('$1.2500')
 
   await expect(page.getByTestId('miser-audit')).toContainText('intact · 12 entries')
   await expect(page.getByTestId('miser-cache')).toContainText('healthy')
   await expect(page.getByTestId('miser-providers')).toContainText('primary')
 
+  // Usage analytics: per-client and per-model attribution from the ledger.
+  await expect(page.getByTestId('usage-panel')).toBeVisible({ timeout: 15000 })
+  await expect(page.getByTestId('usage-summary')).toContainText('42')
+  await expect(page.getByTestId('usage-clients')).toContainText('ci-pipeline')
+  await expect(page.getByTestId('usage-models')).toContainText('anthropic/claude-haiku')
+  await page.getByTestId('usage-window-24h').click()
+  await expect(page.getByText('LLM usage — 24h')).toBeVisible()
+  await page.getByTestId('usage-window-30d').click()
+
   await page.getByTestId('miser-open-quota').click()
   await page.getByTestId('quota-key').fill('key_e2e_001')
+  await page.getByTestId('quota-client').fill('ci-pipeline')
   await page.getByTestId('quota-tiers').fill('simple,hard')
   await page.getByTestId('quota-rpm').fill('240')
   await page.getByTestId('quota-budget').fill('100')
@@ -29,6 +40,7 @@ test('Cost view shows quotas, expiry, spend, health, and audit integrity', async
 
   await page.getByTestId('miser-open-create').click()
   await page.getByTestId('miser-owner').fill('expiring-agent')
+  await page.getByTestId('miser-client').fill('backup-pipeline')
   await page.getByTestId('miser-tiers').fill('reasoning')
   await page.getByTestId('miser-expires').fill(new Date(Date.now() + 86400000).toISOString().slice(0, 10))
   await page.getByTestId('miser-create').click()

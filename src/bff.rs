@@ -1674,6 +1674,9 @@ pub async fn cost_overview(State(state): State<AppState>, headers: HeaderMap) ->
 #[derive(Deserialize, serde::Serialize)]
 pub struct MiserKeyRequest {
     pub owner: String,
+    /// Client/application label for usage attribution (OpenRouter-style).
+    #[serde(default)]
+    pub client: Option<String>,
     #[serde(default)]
     pub allowed_tiers: Vec<String>,
     pub rate_limit_rpm: Option<u32>,
@@ -1683,6 +1686,8 @@ pub struct MiserKeyRequest {
 
 #[derive(Deserialize)]
 pub struct MiserQuotaRequest {
+    #[serde(default)]
+    pub client: Option<String>,
     #[serde(default)]
     pub allowed_tiers: Vec<String>,
     pub rate_limit_rpm: Option<u32>,
@@ -1744,6 +1749,7 @@ pub async fn miser_key_update(
         );
     };
     let payload = json!({
+        "client": body.client,
         "allowed_tiers": body.allowed_tiers,
         "rate_limit_rpm": body.rate_limit_rpm,
         "monthly_budget_usd": body.monthly_budget_usd,
@@ -1767,6 +1773,52 @@ pub async fn miser_key_update(
             &format!("miser unreachable: {error}"),
         ),
     }
+}
+
+/// GET /api/bff/cost/usage — Miser usage analytics for the reporting window
+/// (`window=24h|7d|30d|all`, optional `client=`). Proxies the gateway's
+/// aggregate ledger: totals plus per-model/tier/key/client/day rollups.
+pub async fn cost_usage(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    if let Err(response) = require_admin(&state, &headers).await {
+        return response;
+    }
+    let Some(token) = svc_env(&state, "MISER_ADMIN_KEY") else {
+        return Json(json!({ "configured": false })).into_response();
+    };
+    let mut url = format!("{}/admin/usage/summary", miser_url());
+    let mut query: Vec<String> = Vec::new();
+    if let Some(window) = params.get("window") {
+        query.push(format!("window={}", query_encode(window)));
+    }
+    if let Some(client) = params.get("client") {
+        query.push(format!("client={}", query_encode(client)));
+    }
+    if !query.is_empty() {
+        url.push('?');
+        url.push_str(&query.join("&"));
+    }
+    match backend_get(&state, url, Some(&token)).await {
+        Ok(v) => Json(v).into_response(),
+        Err(e) => now_err(StatusCode::BAD_GATEWAY, &format!("miser: {e}")),
+    }
+}
+
+/// Minimal percent-encoding for query values (spaces, '&', '=', '%').
+fn query_encode(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(byte as char)
+            }
+            _ => out.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    out
 }
 
 /// GET /api/bff/cost/health — Miser routing/cache/provider and audit posture.
