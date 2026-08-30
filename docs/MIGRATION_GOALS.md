@@ -158,23 +158,37 @@ administration, unified activity, risk and compliance, and backend UI
 retirement.
 
 Remaining work before final delivery:
-- Verify the production cutover deploy runs land green and spot-check that
-  the tailnet-only vhosts are enforced on the VPS (they are installed
-  automatically by each service's deploy workflow, gated on `nginx -t`).
+- Forge deploy run: blocked by a transient Tailscale OAuth error
+  (`requested tags [tag:hostinger] are invalid or not permitted`) in the
+  "Connect to tailnet" CI step. The fix commits (h2 0.4.19, plain-HTTP
+  tailnet vhost) are on `main`; the run needs a re-run once the tailnet
+  ACL/OAuth client scope for `tag:hostinger` is verified in the Tailscale
+  admin console (not reachable from this machine — no VPS SSH key, ACL not
+  in any repo).
+- Spot-check the tailnet-only vhosts from a non-tailnet vantage point:
+  from the public internet, hive `/` returns 403 (UI blocked) and relay
+  `/live` returns 200 (API available) as intended. Patroclus paths return
+  302 through Cloudflare, so origin-level enforcement should be confirmed
+  from the VPS or a non-Cloudflare route.
 
 Completed since the previous status:
 - Production cutover artifacts and automation shipped across all backend
   repos: tailnet-only nginx vhosts committed in hive, relay, patroclus,
   sentiel, argus, forge, and Aegis, and every deploy workflow now installs
   its vhost (`/etc/nginx/sites-available/<svc>.conf`) with an `nginx -t`
-  gate before reload, so API/health routes stay up even if a cert is not
-  yet provisioned. The deploy runs for hive, patroclus, sentiel, Aegis,
-  and argus completed successfully.
+  gate before reload. Services without public DNS/certs (sentiel, forge,
+  Aegis) use plain-HTTP tailnet-only vhosts so `nginx -t` stays green.
+  Deploy runs succeeded for hive, relay, patroclus, sentiel, Aegis, and
+  argus.
 - Real-service smoke tests pass locally: all 7 backends plus Miser healthy
   and `npm run test:services` green (9/9).
-- Dependency hardening triggered by the cutover runs: relay pins `mcp<2`
-  (2.x removed `mcp.server.fastmcp`) with the corresponding test-fake fix,
-  and forge bumps `h2` to 0.4.19 (RUSTSEC-2026-0258).
+- Relay production incident fixed: `_build_mcp_tool_handler` built an
+  invalid `inspect.Signature` (optional param before required param) which
+  crashed relay at startup after the latest image promotion; parameters are
+  now ordered required-first. Also pinned `mcp<2` (2.x removed
+  `mcp.server.fastmcp`) and fixed the test fake that the pin unmasked.
+- Forge: bumped `h2` to 0.4.19 (RUSTSEC-2026-0258); `cargo audit` and the
+  CI security job are green.
 - Modal-based UX is complete for Egress, Cost, Supply Chain, Orchestration,
   Services, and the Security containment flow (shared Modal, PromptDialog,
   WizardModal, and ConfirmDialog components; native confirm()/prompt()/alert()
