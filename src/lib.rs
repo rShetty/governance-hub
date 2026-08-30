@@ -5,7 +5,6 @@ pub mod config;
 pub mod console;
 pub mod keys;
 pub mod proxy;
-pub mod status;
 
 use axum::{
     http::header,
@@ -56,17 +55,11 @@ pub fn router(state: AppState) -> Router {
     let app_routes = Router::new()
         .route("/", get(dashboard))
         .route("/assets/{*path}", get(assets::asset))
-        .route("/api/services", get(services_status))
         .route("/logout", post(console::logout).get(console::logout_get))
         .route("/api/me", get(console::me))
         .route("/api/console/identities", get(console::identities))
         .route("/api/bff/directory/agents", get(bff::agent_directory))
         .route("/api/bff/actors", get(bff::actors_list))
-        .route("/api/console/services", get(console::services_list))
-        .route(
-            "/api/console/services",
-            post(console::service_upsert).delete(console::service_delete),
-        )
         .route(
             "/api/svc/{service}/{*path}",
             get(proxy::proxy_get)
@@ -203,36 +196,6 @@ pub fn router(state: AppState) -> Router {
 
 async fn health() -> Json<serde_json::Value> {
     Json(serde_json::json!({"status": "ok", "service": "governance-hub"}))
-}
-
-/// Live status of every configured governance service (probed concurrently).
-async fn services_status(
-    axum::extract::State(state): axum::extract::State<AppState>,
-) -> Json<serde_json::Value> {
-    let mut entries: Vec<_> = state.config.services.iter().collect();
-    entries.sort_by(|a, b| a.0.cmp(b.0));
-
-    let mut handles = Vec::new();
-    for (id, cfg) in &entries {
-        let client = state.client.clone();
-        let id = (*id).clone();
-        let cfg = (*cfg).clone();
-        handles.push(tokio::spawn(async move {
-            let (_, service_status) = status::probe(&client, &id, &cfg).await;
-            service_status
-        }));
-    }
-
-    let mut services = Vec::new();
-    for h in handles {
-        if let Ok(s) = h.await {
-            services.push(s);
-        }
-    }
-    Json(serde_json::json!({
-        "services": services,
-        "healthy_count": services.iter().filter(|s| s.healthy).count(),
-    }))
 }
 
 async fn dashboard() -> Html<&'static str> {

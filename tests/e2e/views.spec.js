@@ -13,15 +13,10 @@ test.beforeEach(async ({ page }) => {
 
 test('Mission Control: KPI band populates from live backends', async ({ page }) => {
   await page.goto(BASE, { waitUntil: 'domcontentloaded' })
-  await expect(page.getByText('Backends up')).toBeVisible()
-  // Backends-up KPI shows N/M form
-  const kpiPanel = page.locator('div', { hasText: 'Backends up' })
+  await expect(page.getByText('Agent identities')).toBeVisible()
+  const kpiPanel = page.locator('div', { hasText: 'Agent identities' })
     .filter({ has: page.locator('.label') }).last()
   await expect(kpiPanel).toBeVisible({ timeout: 15000 })
-  await page.waitForFunction(
-    () => document.body.innerText.includes('/'),
-    null, { timeout: 15000 },
-  )
 })
 
 test('Tools & MCP: Relay health card and MCP catalogue render', async ({ page }) => {

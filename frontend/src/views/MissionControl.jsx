@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchServices, svcGet } from '../api.js'
+import { svcGet } from '../api.js'
 import { PageHeader } from '../components.jsx'
 
 const QUICK_ACTIONS = [
@@ -10,7 +10,6 @@ const QUICK_ACTIONS = [
 ]
 
 const KPI_TARGETS = {
-  'Backends up': '/services',
   'Agent identities': '/agents',
   'Spend today': '/cost',
   'Open alerts': '/security',
@@ -18,12 +17,10 @@ const KPI_TARGETS = {
 }
 
 function useFleet() {
-  const [services, setServices] = useState(null)
   const [err, setErr] = useState('')
   const [kpi, setKpi] = useState({ agents: null, spend: null, alerts: null })
   const [signals, setSignals] = useState([])
   useEffect(() => {
-    fetchServices().then(setServices).catch((e) => setErr(String(e.message || e)))
     // KPI band: agent identities from Argus dir, spend from Miser, alerts from Sentiel
     svcGet('hive', '/api/agents')
       .then((d) => setKpi((k) => ({ ...k, agents: (d.items ?? d.agents ?? []).length })))
@@ -40,22 +37,10 @@ function useFleet() {
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error('activity unavailable'))))
       .then((data) => setSignals(data.items ?? []))
       .catch(() => setSignals([]))
-    const t = setInterval(() => fetchServices().then(setServices).catch(() => {}), 15000)
-    return () => clearInterval(t)
+      .finally(() => setErr(''))
+    return () => {}
   }, [])
-  return { services, err, kpi, signals }
-}
-
-function HealthRow({ s }) {
-  const status = s?.healthy
-  return (
-    <div className="flex items-center gap-3 px-4 py-2.5 border-t border-[#232833]/60">
-      <span className={`dot ${status ? 'dot-ok' : 'dot-crit'}`} />
-      <span className="text-[13px] text-slate-200 flex-1">{s.label}</span>
-      <span className="num text-[11px] text-slate-600">{s.latency_ms != null ? `${s.latency_ms}ms` : ''}</span>
-      <span className={`badge ${status ? 'badge-ok' : 'badge-crit'}`}>{status ? 'up' : 'down'}</span>
-    </div>
-  )
+  return { err, kpi, signals }
 }
 
 function KpiCard({ label, value, helper, tone = '#f3f6fb', navigate }) {
@@ -70,20 +55,10 @@ function KpiCard({ label, value, helper, tone = '#f3f6fb', navigate }) {
 }
 
 export default function MissionControl() {
-  const { services, err, kpi, signals } = useFleet()
-  const list = services?.services ?? []
-  const up = list.filter((s) => s.healthy).length
+  const { err, kpi, signals } = useFleet()
   const criticalSignals = signals.filter((signal) => /violation|blocked|revoked|critical/i.test(String(signal.kind))).length
 
   const attentionItems = [
-    ...list.filter((service) => !service.healthy).map((service) => ({
-      id: `service-${service.id}`,
-      title: `${service.label} is down`,
-      description: service.detail || 'The backend did not respond to the latest health probe.',
-      severity: 'critical',
-      actionLabel: 'Open registry',
-      target: '/services',
-    })),
     ...signals.filter((signal) => /violation|blocked|revoked|critical/i.test(String(signal.kind))).slice(0, 5).map((signal, index) => ({
       id: `signal-${index}`,
       title: String(signal.kind),
@@ -141,8 +116,7 @@ export default function MissionControl() {
       </section>
 
       <section aria-label="Governance metrics">
-        <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
-          <KpiCard navigate={goTo} label="Backends up" value={services ? `${up}/${list.length}` : null} helper="live fleet health" />
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
           <KpiCard navigate={goTo} label="Agent identities" value={kpi.agents} helper="machine principals" />
           <KpiCard navigate={goTo} label="Spend today" value={kpi.spend} helper="routing keys active" tone="#5eead4" />
           <KpiCard navigate={goTo} label="Open alerts" value={kpi.alerts} helper="recent risk events" tone={Number(kpi.alerts) > 0 ? '#fbbf24' : undefined} />
@@ -154,36 +128,22 @@ export default function MissionControl() {
         <div className="panel p-4 text-sm text-rose-300 border-rose-500/30">{err}</div>
       )}
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Fleet health */}
-        <section className="panel overflow-hidden">
-          <div className="px-4 py-3 border-b border-[#232833] flex items-center justify-between">
-            <span className="label">Backend fleet</span>
-            <span className="num text-[11px] text-slate-600">auto-refresh 15s</span>
-          </div>
-          {!services && !err && <div className="p-4 text-sm text-slate-600">Probing…</div>}
-          {list.map((s) => <HealthRow key={s.id} s={s} />)}
-          {!list.length && !err && <div className="p-8 text-center text-sm text-slate-600">No backend status available.</div>}
-        </section>
-
-        {/* Recent signals */}
-        <section className="panel overflow-hidden">
-          <div className="px-4 py-3 border-b border-[#232833] flex items-center justify-between">
-            <span className="label">Recent signals</span>
-            <span className="num text-[11px] text-slate-600">{signals.length}</span>
-          </div>
-          <div id="signals-feed" data-testid="mission-signals" className="max-h-[360px] overflow-y-auto">
-            {!signals.length && <div className="p-8 text-center text-sm text-slate-600">No recent signals.</div>}
-            {signals.slice(0, 12).map((signal, index) => (
-              <div key={index} className="flex items-center gap-3 px-4 py-2 border-t border-[#232833]/60">
-                <span className="badge badge-mono !text-[10px]">{signal.source}</span>
-                <span className="text-[13px] text-slate-200">{String(signal.kind)}</span>
-                <span className="ml-auto num text-[11px] text-slate-600">{String(signal.ts ?? '').slice(11, 19)}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
+      <section className="panel overflow-hidden">
+        <div className="px-4 py-3 border-b border-[#232833] flex items-center justify-between">
+          <span className="label">Recent signals</span>
+          <span className="num text-[11px] text-slate-600">{signals.length}</span>
+        </div>
+        <div id="signals-feed" data-testid="mission-signals" className="max-h-[360px] overflow-y-auto">
+          {!signals.length && <div className="p-8 text-center text-sm text-slate-600">No recent signals.</div>}
+          {signals.slice(0, 12).map((signal, index) => (
+            <div key={index} className="flex items-center gap-3 px-4 py-2 border-t border-[#232833]/60">
+              <span className="badge badge-mono !text-[10px]">{signal.source}</span>
+              <span className="text-[13px] text-slate-200">{String(signal.kind)}</span>
+              <span className="ml-auto num text-[11px] text-slate-600">{String(signal.ts ?? '').slice(11, 19)}</span>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   )
 }

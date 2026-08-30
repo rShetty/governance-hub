@@ -33,7 +33,7 @@ test('Command palette navigates and skip link is available', async ({ page }) =>
 test('Mission Control exposes prioritized and actionable dashboard', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Attention required' })).toBeVisible()
   await expect(page.locator('[data-testid="attention-required"] .attention-item').first()).toBeVisible()
-  await expect(page.getByTestId('kpi-backends-up')).toBeVisible()
+  await expect(page.getByTestId('kpi-agent-identities')).toBeVisible()
 
   await page.getByRole('button', { name: 'Install MCP server' }).click()
   await expect(page).toHaveURL(/\/tools$/)

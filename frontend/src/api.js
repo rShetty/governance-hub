@@ -1,11 +1,5 @@
 const BASE = import.meta.env.VITE_HUB_API ?? ''
 
-export async function fetchServices() {
-  const r = await fetch(`${BASE}/api/services`, { credentials: 'same-origin' })
-  if (!r.ok) throw new Error(`services: ${r.status}`)
-  return r.json()
-}
-
 /**
  * Proxy a GET to one of the governed services through the hub.
  * The hub injects the configured bearer token server-side.
@@ -50,24 +44,4 @@ export async function identities() {
   const r = await fetch(`${BASE}/api/console/identities`, { credentials: 'same-origin' })
   if (!r.ok) throw new Error(`identities: ${r.status}`)
   return r.json()
-}
-
-export async function upsertService(svc) {
-  const r = await fetch(`${BASE}/api/console/services`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(svc),
-  })
-  const body = await r.json().catch(() => ({}))
-  if (!r.ok) throw new Error(body.error || `upsert: ${r.status}`)
-  return body
-}
-
-export async function deleteService(id) {
-  const r = await fetch(`${BASE}/api/console/services/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-  })
-  const body = await r.json().catch(() => ({}))
-  if (!r.ok) throw new Error(body.error || `delete: ${r.status}`)
-  return body
 }

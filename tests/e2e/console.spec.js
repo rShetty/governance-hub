@@ -35,34 +35,7 @@ test('SSO: full login roundtrip lands on Mission Control', async ({ page }) => {
   await expect(page.getByText('authenticated')).toBeVisible()
 })
 
-// ── 2. Service registry CRUD ─────────────────────────────────────────────────
-
-test('Registry: create, list and remove a service', async ({ page }) => {
-  const id = `e2e-${runId}`
-  await page.getByRole('button', { name: 'Service Registry' }).click()
-  await expect(page.getByRole('heading', { name: 'Service Registry' })).toBeVisible()
-
-  await page.getByTestId('service-open').click()
-  await page.getByLabel(/id \(a-z0-9-\)/i).fill(id)
-  await page.getByLabel('Label').fill(`E2E Service ${runId}`)
-  await page.getByLabel(/Internal URL/i).fill('https://example.com/health')
-  await page.getByLabel('Description').fill('e2e test service')
-  await page.getByRole('button', { name: 'Save service' }).click()
-  await expect(
-    page.getByText(/Stored|stored|reload|registry/i).first(),
-  ).toBeVisible({ timeout: 10000 })
-
-  // Remove it again after recreating the form state.
-  await page.getByRole('button', { name: 'Service Registry' }).click()
-  await page.getByTestId('service-open').click()
-  await expect(page.getByLabel(/id \(a-z0-9-\)/i)).toBeVisible()
-  await page.getByLabel(/id \(a-z0-9-\)/i).fill(id)
-  await page.getByRole('button', { name: 'Remove' }).click()
-  await page.getByTestId('confirm-action').click()
-  await expect(page.getByText(`Removed ${id}`)).toBeVisible({ timeout: 10000 })
-})
-
-// ── 3. Agent creation in Hive (via console proxy + UI where applicable) ──────
+// ── 2. Agent creation in Hive (via console proxy + UI where applicable) ──────
 
 test('Agents: Hive roster view renders runtime agents section', async ({ page }) => {
   await page.goto(BASE)

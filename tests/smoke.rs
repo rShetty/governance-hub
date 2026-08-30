@@ -163,25 +163,6 @@ async fn dashboard_renders_with_security_headers() {
 }
 
 #[tokio::test]
-async fn services_status_reports_unreachable_as_degraded_not_error() {
-    let state = test_state();
-    let cookie = session_cookie_for(&state, true);
-    let app = router(state);
-    let req = axum::http::Request::builder()
-        .uri("/api/services")
-        .header("cookie", &cookie)
-        .body(Body::empty())
-        .unwrap();
-    let resp = app.oneshot(req).await.unwrap();
-    let status = resp.status();
-    let bytes = resp.into_body().collect().await.unwrap().to_bytes();
-    assert_eq!(status, axum::http::StatusCode::OK);
-    let body = String::from_utf8_lossy(&bytes).to_string();
-    assert!(body.contains("\"healthy\":false"), "{body}");
-    assert!(body.contains("Unreachable Service"), "{body}");
-}
-
-#[tokio::test]
 async fn unauthenticated_browser_is_redirected_to_login() {
     let req = axum::http::Request::builder()
         .uri("/")
