@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ConfirmDialog, PromptDialog, ResourceSelect, useToast } from '../components.jsx'
+import { ConfirmDialog, PromptDialog, ResourceSelect, useToast, usePagination, PaginationControls } from '../components.jsx'
 
 export default function Access() {
   const [policies, setPolicies] = useState(null)
@@ -168,6 +168,11 @@ export default function Access() {
       ? policies.policies
       : []
 
+  const approvalPage = usePagination(approvals, 20)
+  const sessionPage = usePagination(sessions, 20)
+  const resourcePage = usePagination(resources, 20)
+  const policyPage = usePagination(list, 20)
+
   return (
     <div className="space-y-6">
       <div>
@@ -179,24 +184,26 @@ export default function Access() {
       {err && <div className="panel p-4 text-[13px] text-amber-400/90">Patroclus unavailable — {err}</div>}
       <section className="panel overflow-hidden" data-testid="pending-approvals">
         <div className="px-4 py-3 border-b border-[#232833]"><span className="label">Pending approvals</span></div>
-        {approvals.length ? approvals.map((item) => (
+        {approvals.length ? approvalPage.pageItems.map((item) => (
           <div key={item.id} className="px-4 py-2 border-t border-[#232833]/60 flex items-center gap-2">
             <span className="text-xs font-mono text-slate-400">{item.id}</span>
             <button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`approve-${item.id}`} onClick={() => setApprovalDialog({ id: item.id, values: {} })}>Approve</button>
             <button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`deny-${item.id}`} onClick={() => setDenyDialog({ id: item.id, values: {} })}>Deny</button>
           </div>
         )) : <div className="p-6 text-sm text-slate-600">No pending approvals.</div>}
+        <PaginationControls testIdPrefix="access-approvals" page={approvalPage.page} totalPages={approvalPage.totalPages} total={approvalPage.total} singular="approval" plural="approvals" onPageChange={approvalPage.setPage} />
       </section>
 
       <section className="panel overflow-hidden" data-testid="live-sessions">
         <div className="px-4 py-3 border-b border-[#232833]"><span className="label">Live sessions</span></div>
-        {sessions.length ? sessions.map((session) => (
+        {sessions.length ? sessionPage.pageItems.map((session) => (
           <div key={session.id ?? session.session_id} className="px-4 py-2 border-t border-[#232833]/60 flex items-center gap-2">
             <span className="text-xs font-mono text-slate-400">{session.id ?? session.session_id}</span>
             <button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`inspect-${session.id ?? session.session_id}`} onClick={() => inspectSession(session.id ?? session.session_id)}>Inspect</button>
             <button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`kill-${session.id ?? session.session_id}`} onClick={() => setKillSessionId(session.id ?? session.session_id)}>Kill</button>
           </div>
         )) : <div className="p-6 text-sm text-slate-600" data-testid="no-sessions">No live sessions.</div>}
+        <PaginationControls testIdPrefix="access-sessions" page={sessionPage.page} totalPages={sessionPage.totalPages} total={sessionPage.total} singular="session" plural="sessions" onPageChange={sessionPage.setPage} />
       </section>
 
       {selectedSession && (
@@ -254,12 +261,13 @@ export default function Access() {
 
       <section className="panel overflow-hidden" data-testid="resource-list">
         <div className="px-4 py-3 border-b border-[#232833]"><span className="label">Protected resources</span></div>
-        {resources.length ? resources.map((resource) => (
+        {resources.length ? resourcePage.pageItems.map((resource) => (
           <div key={resource.id} className="px-4 py-2 border-t border-[#232833]/60 flex items-center gap-2 text-sm text-slate-300">
             <span>{resource.name}</span>
             <button className="btn btn-ghost !py-1 !px-2 !text-[11px]" data-testid={`resource-detail-${resource.id}`} onClick={() => openResourceDetail(resource.id)}>Detail</button>
           </div>
         )) : <div className="p-6 text-sm text-slate-600">No resources registered.</div>}
+        <PaginationControls testIdPrefix="access-resources" page={resourcePage.page} totalPages={resourcePage.totalPages} total={resourcePage.total} singular="resource" plural="resources" onPageChange={resourcePage.setPage} />
       </section>
 
       {resourceDialog && (
@@ -403,7 +411,7 @@ export default function Access() {
         <table className="data">
           <thead><tr><th>Name</th><th>Engine</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>
-            {list.map((p) => (
+            {policyPage.pageItems.map((p) => (
               <tr key={p.id ?? p.name} data-testid={`policy-${p.id ?? p.name}`}>
                 <td className="text-slate-200">{p.name}</td>
                 <td><span className="badge badge-mono !text-[10px]">{p.engine}</span></td>
@@ -423,6 +431,7 @@ export default function Access() {
             )}
           </tbody>
         </table>
+        <PaginationControls testIdPrefix="access-policies" page={policyPage.page} totalPages={policyPage.totalPages} total={policyPage.total} singular="policy" plural="policies" onPageChange={policyPage.setPage} />
       </section>
     </div>
   )

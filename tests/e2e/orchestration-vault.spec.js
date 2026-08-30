@@ -5,11 +5,13 @@ test('Admins create Hive teams and workflows through the Hub', async ({ page }) 
   await expect(page.getByText('administrator')).toBeVisible()
   await page.getByRole('button', { name: 'Orchestration' }).click()
 
+  await page.getByTestId('team-open').click()
   await page.getByTestId('team-name').fill('journey-team')
   await page.getByTestId('team-agents').fill('agt_e2e_001')
   await page.getByTestId('team-submit').click()
   await expect(page.getByText(/Team .+ created\./)).toBeVisible()
 
+  await page.getByTestId('workflow-open').click()
   await page.getByTestId('workflow-name').fill('journey-workflow')
   await page.getByTestId('workflow-steps').fill('classify\ninvoke\naudit')
   await page.getByTestId('workflow-submit').click()

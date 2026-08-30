@@ -13,6 +13,7 @@ test('Hub does not expose external service UI links', async ({ page }) => {
 test('Service registry labels product UI paths as internal-only', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'Service Registry' }).click()
+  await page.getByTestId('service-open').click()
 
   await expect(page.getByText(/UI path \(developer-only, never linked\)/)).toBeVisible()
   await expect(page.getByText(/product frontends are internal only/)).toBeVisible()

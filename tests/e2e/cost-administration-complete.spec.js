@@ -19,6 +19,7 @@ test('Cost view shows quotas, expiry, spend, health, and audit integrity', async
   await expect(page.getByTestId('miser-cache')).toContainText('healthy')
   await expect(page.getByTestId('miser-providers')).toContainText('primary')
 
+  await page.getByTestId('miser-open-quota').click()
   await page.getByTestId('quota-key').fill('key_e2e_001')
   await page.getByTestId('quota-tiers').fill('simple,hard')
   await page.getByTestId('quota-rpm').fill('240')
@@ -26,6 +27,7 @@ test('Cost view shows quotas, expiry, spend, health, and audit integrity', async
   await page.getByTestId('quota-submit').click()
   await expect(page.getByText('Quotas updated for key_e2e_001.')).toBeVisible()
 
+  await page.getByTestId('miser-open-create').click()
   await page.getByTestId('miser-owner').fill('expiring-agent')
   await page.getByTestId('miser-tiers').fill('reasoning')
   await page.getByTestId('miser-expires').fill(new Date(Date.now() + 86400000).toISOString().slice(0, 10))

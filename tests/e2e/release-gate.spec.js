@@ -5,6 +5,7 @@ test('Supply chain blocks a critical package and trusts a clean package', async 
   await page.goto('/')
   await page.getByRole('button', { name: 'Supply Chain' }).click()
 
+  await page.getByTestId('package-open').click()
   await page.getByTestId('package-name').fill('blocked-package')
   await page.getByTestId('package-version').fill('0.1.0')
   await page.getByTestId('package-publisher').fill('trusted-org')
@@ -17,6 +18,7 @@ test('Supply chain blocks a critical package and trusts a clean package', async 
   await page.getByRole('button', { name: 'Sign package' }).click()
   await expect(page.getByText('sign completed.')).toBeVisible()
 
+  await page.getByTestId('package-open').click()
   await page.getByTestId('package-name').fill('clean-package')
   await page.getByTestId('package-version').fill('1.0.0')
   await page.getByTestId('package-publisher').fill('trusted-org')

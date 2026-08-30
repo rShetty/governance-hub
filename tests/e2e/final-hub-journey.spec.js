@@ -30,13 +30,21 @@ test('Final verification: admin completes every major governance domain in the H
 
   // Orchestration
   await page.getByRole('button', { name: 'Orchestration' }).click()
+  await page.getByTestId('team-open').click()
   await expect(page.getByTestId('team-form')).toBeVisible()
+  await page.getByTestId('modal-close').click()
+  await page.getByTestId('workflow-open').click()
   await expect(page.getByTestId('workflow-form')).toBeVisible()
+  await page.getByTestId('modal-close').click()
 
   // Supply chain
   await page.getByRole('button', { name: 'Supply Chain' }).click()
+  await page.getByTestId('package-open').click()
   await expect(page.getByTestId('package-form')).toBeVisible()
+  await page.getByTestId('modal-close').click()
+  await page.getByTestId('publisher-open').click()
   await expect(page.getByTestId('publisher-form')).toBeVisible()
+  await page.getByTestId('modal-close').click()
 
   // Risk
   await page.getByRole('button', { name: 'Security' }).click()
@@ -49,5 +57,6 @@ test('Final verification: admin completes every major governance domain in the H
 
   // Cost (admin-only)
   await page.getByRole('button', { name: 'Cost & Routing' }).click()
+  await page.getByTestId('miser-open-create').click()
   await expect(page.getByTestId('miser-key-form')).toBeVisible({ timeout: 10000 })
 })

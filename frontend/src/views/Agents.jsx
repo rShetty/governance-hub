@@ -1,5 +1,5 @@
 import { svcGet, fmtInt } from '../api.js'
-import { useSvc, Panel, Table, Guard } from '../components.jsx'
+import { useSvc, Panel, Table, Guard, usePagination, PaginationControls } from '../components.jsx'
 
 export default function Agents() {
   const { data, error, loading } = useSvc('hive', [
@@ -10,6 +10,8 @@ export default function Agents() {
 
   const agents = Array.isArray(data.agents) ? data.agents : data.agents?.agents ?? []
   const delegations = Array.isArray(data.delegations) ? data.delegations : []
+  const agentPage = usePagination(agents, 20)
+  const delegationPage = usePagination(delegations, 20)
   const wallet = data.wallet ?? {}
 
   return (
@@ -30,7 +32,7 @@ export default function Agents() {
         <Panel title="Agent roster" subtitle="Live from Hive marketplace registry">
           <Table
             cols={['Name', 'Type', 'Status', 'Owner']}
-            rows={agents.map((a) => ({
+            rows={agentPage.pageItems.map((a) => ({
               Name: a.name ?? a.username,
               Type: a.agent_type ?? a.type,
               Status: a.status,
@@ -38,13 +40,14 @@ export default function Agents() {
             }))}
             empty="No agents registered yet."
           />
+          <PaginationControls testIdPrefix="agents" page={agentPage.page} totalPages={agentPage.totalPages} total={agentPage.total} singular="agent" plural="agents" onPageChange={agentPage.setPage} />
         </Panel>
 
         {delegations.length > 0 && (
           <Panel title="Recent delegations">
             <Table
               cols={['ID', 'From', 'To', 'Task', 'Status']}
-              rows={delegations.map((d) => ({
+              rows={delegationPage.pageItems.map((d) => ({
                 ID: (d.id ?? '').slice(0, 8),
                 From: d.delegating_agent ?? d.from_agent,
                 To: d.executing_agent ?? d.to_agent,
@@ -52,6 +55,7 @@ export default function Agents() {
                 Status: d.status,
               }))}
             />
+            <PaginationControls testIdPrefix="delegations" page={delegationPage.page} totalPages={delegationPage.totalPages} total={delegationPage.total} singular="delegation" plural="delegations" onPageChange={delegationPage.setPage} />
           </Panel>
         )}
       </Guard>

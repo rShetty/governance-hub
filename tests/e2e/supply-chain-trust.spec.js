@@ -4,6 +4,7 @@ test('Supply chain package trust workflow completes', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'Supply Chain' }).click()
 
+  await page.getByTestId('package-open').click()
   await page.getByTestId('package-name').fill('trusted-package')
   await page.getByTestId('package-version').fill('1.0.0')
   await page.getByTestId('package-publisher').fill('trusted-org')

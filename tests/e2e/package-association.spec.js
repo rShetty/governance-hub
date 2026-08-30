@@ -4,6 +4,7 @@ test('Supply chain associates packages with runtime agents', async ({ page }) =>
   await page.goto('/')
   await page.getByRole('button', { name: 'Supply Chain' }).click()
 
+  await page.getByTestId('package-open').click()
   await page.getByTestId('package-name').fill('associated-package')
   await page.getByTestId('package-version').fill('1.0.0')
   await page.getByTestId('package-publisher').fill('trusted-org')

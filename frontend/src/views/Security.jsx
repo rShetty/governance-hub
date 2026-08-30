@@ -1,4 +1,4 @@
-import { useSvc, Panel, Table, Guard } from '../components.jsx'
+import { useSvc, Panel, Table, Guard, ConfirmDialog } from '../components.jsx'
 import { fmtInt } from '../api.js'
 import { useState } from 'react'
 
@@ -12,6 +12,7 @@ export default function Security() {
   ])
   const [message, setMessage] = useState(null)
   const [acknowledged, setAcknowledged] = useState([])
+  const [containConfirm, setContainConfirm] = useState(null)
 
   const acknowledge = async (alertId) => {
     const response = await fetch(`/api/svc/sentiel/api/alerts/${alertId}/acknowledge`, { method: 'POST' })
@@ -47,20 +48,24 @@ export default function Security() {
     })
   }
 
-  const containAgent = async (event) => {
+  const containAgent = (event) => {
     event.preventDefault()
     const form = event.currentTarget
-    if (!window.confirm(`Contain ${form.agent_id.value}? This revokes identity and kills sessions.`)) return
+    setContainConfirm({ agent_id: form.agent_id.value, reason: form.reason.value })
+  }
+
+  const performContain = async ({ agent_id: agentId, reason }) => {
     const response = await fetch('/api/bff/risk/contain', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ agent_id: form.agent_id.value, reason: form.reason.value }),
+      body: JSON.stringify({ agent_id: agentId, reason }),
     })
     const body = await response.json().catch(() => ({}))
     setMessage({
       ok: response.ok && body.contained === true,
-      text: response.ok ? `Contained ${form.agent_id.value}.` : body.error || `status ${response.status}`,
+      text: response.ok ? `Contained ${agentId}.` : body.error || `status ${response.status}`,
     })
+    setContainConfirm(null)
   }
 
   const createRemediation = async (event) => {
@@ -146,6 +151,16 @@ export default function Security() {
             <button className="btn btn-danger" data-testid="contain-submit">Contain</button>
           </form>
         </Panel>
+
+        <ConfirmDialog
+          open={!!containConfirm}
+          title="Contain agent"
+          message={`Contain ${containConfirm?.agent_id ?? ''}? This revokes the agent identity, kills its sessions, and triggers an emergency stop.`}
+          confirmLabel="Contain agent"
+          danger
+          onConfirm={() => performContain(containConfirm)}
+          onCancel={() => setContainConfirm(null)}
+        />
 
         <Panel title="Remediation ownership" subtitle="Assign risk remediation to an accountable owner">
           <form className="space-y-2" onSubmit={createRemediation} data-testid="remediation-form">

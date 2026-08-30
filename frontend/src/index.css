@@ -255,7 +255,9 @@ a { color: var(--accent); }
 
 .mobile-data-list { display: grid; gap: 10px; }
 @media (max-width: 767px) {
-  table.data { display: none; }
+  /* Only tables that have an explicit mobile card list counterpart are hidden;
+     every other table stays visible on small screens. */
+  table.data:has(~ .mobile-data-list) { display: none; }
   .mobile-data-list { display: grid; }
 }
 @media (min-width: 768px) {

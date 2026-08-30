@@ -42,6 +42,7 @@ test('Registry: create, list and remove a service', async ({ page }) => {
   await page.getByRole('button', { name: 'Service Registry' }).click()
   await expect(page.getByRole('heading', { name: 'Service Registry' })).toBeVisible()
 
+  await page.getByTestId('service-open').click()
   await page.getByLabel(/id \(a-z0-9-\)/i).fill(id)
   await page.getByLabel('Label').fill(`E2E Service ${runId}`)
   await page.getByLabel(/Internal URL/i).fill('https://example.com/health')
@@ -53,10 +54,11 @@ test('Registry: create, list and remove a service', async ({ page }) => {
 
   // Remove it again after recreating the form state.
   await page.getByRole('button', { name: 'Service Registry' }).click()
+  await page.getByTestId('service-open').click()
   await expect(page.getByLabel(/id \(a-z0-9-\)/i)).toBeVisible()
   await page.getByLabel(/id \(a-z0-9-\)/i).fill(id)
-  page.on('dialog', (d) => d.accept())
   await page.getByRole('button', { name: 'Remove' }).click()
+  await page.getByTestId('confirm-action').click()
   await expect(page.getByText(`Removed ${id}`)).toBeVisible({ timeout: 10000 })
 })
 

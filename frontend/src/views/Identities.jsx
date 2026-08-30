@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { identities } from '../api'
+import { usePagination, PaginationControls } from '../components.jsx'
 
 export default function Identities() {
   const [data, setData] = useState(null)
@@ -12,6 +13,11 @@ export default function Identities() {
       .catch((e) => setErr(String(e.message || e)))
   }, [])
 
+  const humans = Array.isArray(data?.humans) ? data.humans : []
+  const agents = Array.isArray(data?.agents) ? data.agents : []
+  const humanPage = usePagination(humans, 20)
+  const agentPage = usePagination(agents, 20)
+
   if (err) {
     return (
       <div className="p-6 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-sm">
@@ -20,9 +26,6 @@ export default function Identities() {
     )
   }
   if (!data) return <div className="text-slate-500 text-sm">Loading directory…</div>
-
-  const humans = Array.isArray(data.humans) ? data.humans : []
-  const agents = Array.isArray(data.agents) ? data.agents : []
 
   return (
     <div className="space-y-4">
@@ -59,7 +62,7 @@ export default function Identities() {
               </tr>
             </thead>
             <tbody>
-              {humans.map((u) => (
+              {humanPage.pageItems.map((u) => (
                 <tr key={u.id} className="border-t border-slate-800/70">
                   <td className="px-4 py-3 text-slate-200">{u.name || '—'}</td>
                   <td className="px-4 py-3 text-slate-400">{u.email}</td>
@@ -81,6 +84,7 @@ export default function Identities() {
               )}
             </tbody>
           </table>
+          <PaginationControls testIdPrefix="identity-humans" page={humanPage.page} totalPages={humanPage.totalPages} total={humanPage.total} singular="human" plural="humans" onPageChange={humanPage.setPage} />
         </div>
       )}
 
@@ -96,7 +100,7 @@ export default function Identities() {
               </tr>
             </thead>
             <tbody>
-              {agents.map((a) => (
+              {agentPage.pageItems.map((a) => (
                 <tr key={a.id} className="border-t border-slate-800/70">
                   <td className="px-4 py-3 text-slate-200 font-mono text-xs">{a.name}</td>
                   <td className="px-4 py-3 text-slate-400">{a.owner}</td>
@@ -121,6 +125,7 @@ export default function Identities() {
               )}
             </tbody>
           </table>
+          <PaginationControls testIdPrefix="identity-agents" page={agentPage.page} totalPages={agentPage.totalPages} total={agentPage.total} singular="identity" plural="identities" onPageChange={agentPage.setPage} />
         </div>
       )}
     </div>

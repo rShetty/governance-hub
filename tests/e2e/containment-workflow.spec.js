@@ -7,8 +7,8 @@ test('Security containment revokes and stops a failed-attestation agent', async 
 
   await page.getByTestId('contain-agent').fill('agt_e2e_001')
   await page.getByTestId('contain-reason').fill('failed runtime attestation')
-  page.once('dialog', dialog => dialog.accept())
   await page.getByTestId('contain-submit').click()
+  await page.getByTestId('confirm-action').click()
 
   await expect(page.getByText('Contained agt_e2e_001.')).toBeVisible()
 })

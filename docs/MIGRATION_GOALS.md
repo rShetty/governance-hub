@@ -111,7 +111,7 @@ flow can be exercised end to end.
 ## Phase 7 - Unified Activity
 
 - [x] Canonical event DTO.
-- [x] Normalizers for all eight sources (Patroclus, Miser, Hive, Sentiel, Aegis canonicalized; Argus/Forge/Relay events pending).
+- [x] Normalizers for all eight sources (Patroclus, Miser, Hive, Sentiel, Aegis, Argus, Forge, Relay — each source is canonicalized independently in `activity_feed`, so one degraded backend no longer hides the others).
 - [x] Unified timeline endpoint.
 - [x] Actor/session/resource/service/severity filters.
 - [x] End-to-end trace detail view.
@@ -158,15 +158,23 @@ administration, unified activity, risk and compliance, and backend UI
 retirement.
 
 Remaining work before final delivery:
-- Modal-based UX completion for Egress, Cost, Supply Chain, Orchestration,
-  Services, and the remaining inline flows (in progress).
-- Pagination coverage for every list view and removal of the global
-  mobile-hide rule for `table.data`.
-- Routing remaining direct service calls through normalized BFF endpoints with
-  structured degraded states and retry behavior.
-- Hive teams/workflows proof in the Hub Orchestration view.
+- Real-service smoke tests against the deployed backends
+  (`npm run test:services`; use `LIVE_REQUIRED=1 npm run test:services` when
+  all services must be running).
 - Production cutover (reverse-proxy restrictions on backend UIs, removal of
   insecure development flags, real-service smoke tests).
+
+Completed since the previous status:
+- Modal-based UX is complete for Egress, Cost, Supply Chain, Orchestration,
+  Services, and the Security containment flow (shared Modal, PromptDialog,
+  WizardModal, and ConfirmDialog components; native confirm()/prompt()/alert()
+  calls removed from operator flows).
+- Pagination covers Access policies/sessions/resources/approvals, Agents,
+  Identities, Cost keys, Supply Chain packages/publishers, Egress
+  logs/policies, Orchestration teams/workflows, and Agents delegations. The
+  global mobile-hide rule for `table.data` was replaced with a scoped
+  `:has(~ .mobile-data-list)` rule so tables without a mobile card view stay
+  visible on small screens.
 
 The Production Cutover Checklist below lists operational deployment changes on
 individual services; these are infrastructure configuration changes, not
@@ -191,7 +199,7 @@ Apply these deployment changes to each service after Hub validation:
 
 | Service | Frontend-only capabilities found | Cutover |
 |---|---|---|
-| Hive | Marketplace, agent detail, skills, tasks, teams, workflows, MCP page | Agent/skills/MCP flows ported; teams/workflows remain Phase 9 work |
+| Hive | Marketplace, agent detail, skills, tasks, teams, workflows, MCP page | Agent/skills/MCP flows ported; teams and workflows created and listed from the Hub Orchestration view (proven by `tests/e2e/orchestration-vault.spec.js`) |
 | Hive Orchestration | Teams and workflows | Hub Orchestration view added |
 | Relay | Login/register/app/connectors/admin/settings/API keys/access requests | Connectors/backends/tools/OAuth state ported or represented; registration/API-key screens are developer-only |
 | Patroclus | Dashboard overview, principals, agents, resources, policies, approvals, sessions, vault | Core access/session/policy/remediation/vault metadata flows ported; secret creation/vending intentionally backend-only |

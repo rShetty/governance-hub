@@ -26,7 +26,6 @@ test('Admin clears a Patroclus emergency stop through the Agents UI', async ({ p
   await expect(page.getByTestId('identity-action-result')).toContainText('Emergency stop applied')
 
   await page.getByTestId('agent-restore-btn').click()
-  page.once('dialog', dialog => dialog.accept())
   await expect(page.getByTestId('hub-modal')).toBeVisible()
   await page.getByTestId('dialog-agent_id').selectOption({ label: 'playwright-runtime' })
   await page.getByRole('button', { name: 'Clear stop' }).click()

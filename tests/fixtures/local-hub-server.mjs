@@ -761,6 +761,10 @@ const server = http.createServer(async (request, response) => {
     return send(response, 200, { teams: [{ id: 'team_e2e_001', name: 'Fixture Team' }], workflows: [] })
   }
 
+  if (path === '/api/bff/aegis/policies' && request.method === 'GET') {
+    return send(response, 200, [{ destination: 'blocked.example.test', action: 'block', owner: 'e2e@governance.test' }])
+  }
+
   if ((path === '/api/bff/orchestration/teams' || path === '/api/bff/orchestration/workflows') && request.method === 'POST') {
     let raw = ''
     request.on('data', chunk => { raw += chunk })

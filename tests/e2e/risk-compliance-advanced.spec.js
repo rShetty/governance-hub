@@ -13,6 +13,7 @@ test('Egress operators create an attributed Aegis destination policy', async ({ 
   await page.goto('/')
   await page.getByRole('button', { name: 'Egress' }).click()
 
+  await page.getByTestId('open-policy-dialog').click()
   await expect(page.getByTestId('destination-policy-form')).toBeVisible()
   await page.getByPlaceholder('api.example.test').fill('blocked.example.test')
   await page.getByRole('combobox').selectOption('block')

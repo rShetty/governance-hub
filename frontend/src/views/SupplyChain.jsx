@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Modal, usePagination, PaginationControls } from '../components.jsx'
 
 const BLANK_PACKAGE = {
   name: '',
@@ -25,6 +26,8 @@ export default function SupplyChain() {
   const [associations, setAssociations] = useState([])
   const [signingKey, setSigningKey] = useState(null)
   const [verification, setVerification] = useState(null)
+  const [packageDialog, setPackageDialog] = useState(false)
+  const [publisherDialog, setPublisherDialog] = useState(false)
 
   const openDetail = async (item) => {
     setSelected(item.id)
@@ -153,6 +156,9 @@ export default function SupplyChain() {
     return () => clearTimeout(timer)
   }, [message])
 
+  const packagePage = usePagination(packages ?? [], 20)
+  const publisherPage = usePagination(publishers, 20)
+
   const submit = async (path, body) => {
     setBusy(true)
     try {
@@ -166,6 +172,8 @@ export default function SupplyChain() {
       setMessage({ ok: true, text: path.includes('publishers') ? 'Publisher trusted.' : 'Package registered.' })
       setPackageForm(BLANK_PACKAGE)
       setPublisherForm(BLANK_PUBLISHER)
+      setPackageDialog(false)
+      setPublisherDialog(false)
       load()
     } catch (cause) {
       setMessage({ ok: false, text: String(cause.message || cause) })
@@ -200,7 +208,7 @@ export default function SupplyChain() {
           <table className="data">
             <thead><tr><th>Package</th><th>Publisher</th><th>Status</th></tr></thead>
             <tbody>
-              {packages.map((item) => (
+              {packagePage.pageItems.map((item) => (
                 <tr key={item.id} data-testid={`supply-package-${item.id}`}>
                   <td className="text-slate-200">{item.name}<div className="text-xs text-slate-600">{item.version}</div></td>
                   <td className="text-slate-400">{item.publisher}</td>
@@ -211,6 +219,7 @@ export default function SupplyChain() {
             </tbody>
           </table>
         )}
+        <PaginationControls testIdPrefix="supply-packages" page={packagePage.page} totalPages={packagePage.totalPages} total={packagePage.total} singular="package" plural="packages" onPageChange={packagePage.setPage} />
       </section>
 
       {selected && (
@@ -269,47 +278,53 @@ export default function SupplyChain() {
         </section>
       )}
 
-      <div className="grid xl:grid-cols-2 gap-6">
+      <div className="flex flex-wrap gap-3">
+        <button type="button" className="btn btn-primary" data-testid="package-open" onClick={() => setPackageDialog(true)}>Register package</button>
+        <button type="button" className="btn" data-testid="publisher-open" onClick={() => setPublisherDialog(true)}>Trust publisher</button>
+      </div>
+
+      <Modal open={packageDialog} title="Register package" description="Register a build artifact with Forge for trust evaluation." onClose={() => setPackageDialog(false)}>
         <form
           data-testid="package-form"
-          className="panel p-5 space-y-3"
+          className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault()
             submit('/api/svc/forge/api/packages', { ...packageForm, file_path: packageForm.file_path || undefined })
           }}
         >
-          <h2 className="font-semibold">Register package</h2>
           <input data-testid="package-name" required placeholder="agent-runtime" value={packageForm.name} onChange={(event) => setPackageForm({ ...packageForm, name: event.target.value })} />
           <input data-testid="package-version" required placeholder="1.0.0" value={packageForm.version} onChange={(event) => setPackageForm({ ...packageForm, version: event.target.value })} />
           <input data-testid="package-publisher" required placeholder="trusted-org" value={packageForm.publisher} onChange={(event) => setPackageForm({ ...packageForm, publisher: event.target.value })} />
           <input data-testid="package-path" placeholder="/path/to/package.tar.gz" value={packageForm.file_path} onChange={(event) => setPackageForm({ ...packageForm, file_path: event.target.value })} />
           <button data-testid="package-submit" className="btn btn-primary" disabled={busy}>Register</button>
         </form>
+      </Modal>
 
+      <Modal open={publisherDialog} title="Trust publisher" description="Register a publisher public key so signed packages verify." onClose={() => setPublisherDialog(false)}>
         <form
           data-testid="publisher-form"
-          className="panel p-5 space-y-3"
+          className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault()
             submit('/api/svc/forge/api/publishers', { ...publisherForm, trust_level: Number(publisherForm.trust_level) })
           }}
         >
-          <h2 className="font-semibold">Trust publisher</h2>
           <input data-testid="publisher-name" required placeholder="trusted-org" value={publisherForm.publisher} onChange={(event) => setPublisherForm({ ...publisherForm, publisher: event.target.value })} />
           <textarea data-testid="publisher-key" required placeholder="Public signing key" value={publisherForm.public_key} onChange={(event) => setPublisherForm({ ...publisherForm, public_key: event.target.value })} />
           <button data-testid="publisher-submit" className="btn btn-primary" disabled={busy}>Trust publisher</button>
         </form>
-      </div>
+      </Modal>
 
       {message && <div className={message.ok ? 'text-sm text-teal-300' : 'text-sm text-rose-400'}>{message.text}</div>}
 
       <section className="panel overflow-hidden" data-testid="supply-publishers">
         <div className="px-4 py-3 border-b border-[#232833]"><span className="label">Trusted publishers</span></div>
-        {publishers.length ? publishers.map((publisher) => (
+        {publisherPage.pageItems.length ? publisherPage.pageItems.map((publisher) => (
           <div key={publisher.publisher ?? publisher.name} className="px-4 py-2 border-t border-[#232833]/60 text-sm text-slate-300">
             {publisher.publisher ?? publisher.name}
           </div>
         )) : <div className="p-6 text-sm text-slate-600">No trusted publishers.</div>}
+        <PaginationControls testIdPrefix="supply-publishers" page={publisherPage.page} totalPages={publisherPage.totalPages} total={publisherPage.total} singular="publisher" plural="publishers" onPageChange={publisherPage.setPage} />
       </section>
     </div>
   )

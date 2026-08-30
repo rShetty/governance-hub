@@ -1113,62 +1113,62 @@ pub async fn activity_feed(
                 v,
             ));
         }
-        if let Ok(Value::Array(list)) = pa {
-            for entry in list {
-                items.push(canonical_event(
-                    "patroclus",
-                    entry
-                        .get("action")
-                        .cloned()
-                        .unwrap_or(json!("authorization")),
-                    entry
-                        .get("resource")
-                        .cloned()
-                        .unwrap_or(entry.get("target").cloned().unwrap_or(json!(null))),
-                    entry.get("timestamp").cloned().unwrap_or(json!(null)),
-                    entry,
-                ));
-            }
-        }
-        if let Ok(Value::Object(object)) = mi {
-            if let Some(Value::Array(keys)) = object.get("keys") {
-                for key in keys {
-                    let kind = if key.get("active").and_then(Value::as_bool).unwrap_or(true) {
-                        json!("key.active")
-                    } else {
-                        json!("key.revoked")
-                    };
-                    items.push(canonical_event(
-                        "miser",
-                        kind,
-                        key.get("owner").cloned().unwrap_or(json!(null)),
-                        json!(key
-                            .get("created_at")
-                            .cloned()
-                            .map(|value| value.to_string())
-                            .unwrap_or_default()),
-                        key.clone(),
-                    ));
-                }
-            }
-        }
-        if let Ok(value) = hi {
-            let agents = value.as_array().cloned().unwrap_or_else(|| {
-                value
-                    .get("items")
-                    .and_then(Value::as_array)
+    }
+    if let Ok(Value::Array(list)) = pa {
+        for entry in list {
+            items.push(canonical_event(
+                "patroclus",
+                entry
+                    .get("action")
                     .cloned()
-                    .unwrap_or_default()
-            });
-            for agent in agents {
+                    .unwrap_or(json!("authorization")),
+                entry
+                    .get("resource")
+                    .cloned()
+                    .unwrap_or(entry.get("target").cloned().unwrap_or(json!(null))),
+                entry.get("timestamp").cloned().unwrap_or(json!(null)),
+                entry,
+            ));
+        }
+    }
+    if let Ok(Value::Object(object)) = mi {
+        if let Some(Value::Array(keys)) = object.get("keys") {
+            for key in keys {
+                let kind = if key.get("active").and_then(Value::as_bool).unwrap_or(true) {
+                    json!("key.active")
+                } else {
+                    json!("key.revoked")
+                };
                 items.push(canonical_event(
-                    "hive",
-                    json!("agent.registered"),
-                    agent.get("name").cloned().unwrap_or(json!(null)),
-                    agent.get("created_at").cloned().unwrap_or(json!(null)),
-                    agent,
+                    "miser",
+                    kind,
+                    key.get("owner").cloned().unwrap_or(json!(null)),
+                    json!(key
+                        .get("created_at")
+                        .cloned()
+                        .map(|value| value.to_string())
+                        .unwrap_or_default()),
+                    key.clone(),
                 ));
             }
+        }
+    }
+    if let Ok(value) = hi {
+        let agents = value.as_array().cloned().unwrap_or_else(|| {
+            value
+                .get("items")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default()
+        });
+        for agent in agents {
+            items.push(canonical_event(
+                "hive",
+                json!("agent.registered"),
+                agent.get("name").cloned().unwrap_or(json!(null)),
+                agent.get("created_at").cloned().unwrap_or(json!(null)),
+                agent,
+            ));
         }
     }
     // Relay tool invocations and backend changes.
